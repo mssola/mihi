@@ -1,0 +1,13 @@
+[package]
+name = "cli"
+version = "0.1.0"
+edition = "2021"
+authors = ["Miquel Sabaté Solà <mikisabate@gmail.com>"]
+
+[[bin]]
+name = "mihi"
+path = "src/main.rs"
+
+[dependencies]
+mihi.workspace = true
+inquire = "0.7.5"

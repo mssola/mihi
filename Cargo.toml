@@ -1,0 +1,16 @@
+[workspace]
+members = ["lib/*", "crates/*"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+# Everything under crates/* is GPLv3+; everything under lib/* is under LGPLv3+.
+license = "GPLv3+ AND LGPLv3+"
+authors = ["Miquel Sabaté Solà <mikisabate@gmail.com>"]
+
+[workspace.dependencies]
+mihi = { path = "./lib/mihi", version = "0.1.0" }
+
+[profile.release]
+codegen-units = 1
+lto = true
