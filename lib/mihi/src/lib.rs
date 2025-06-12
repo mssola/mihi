@@ -1,3 +1,4 @@
+use serde_json::Value;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
@@ -6,6 +7,138 @@ use std::path::{Path, PathBuf};
 use rusqlite::{params, Connection};
 
 mod migrate;
+
+#[derive(Debug)]
+pub enum Category {
+    Unknown = 0,
+    Noun,
+    Adjective,
+    Verb,
+    Pronoun,
+    Adverb,
+    Preposition,
+    Conjunction,
+    Interjection,
+    Determiner,
+}
+
+impl std::fmt::Display for Category {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Unknown => write!(f, "unknown"),
+            Self::Noun => write!(f, "noun"),
+            Self::Adjective => write!(f, "adjective"),
+            Self::Verb => write!(f, "verb"),
+            Self::Pronoun => write!(f, "pronoun"),
+            Self::Adverb => write!(f, "adverb"),
+            Self::Preposition => write!(f, "preposition"),
+            Self::Conjunction => write!(f, "conjunction"),
+            Self::Interjection => write!(f, "interjection"),
+            Self::Determiner => write!(f, "determiner"),
+        }
+    }
+}
+
+impl std::default::Default for Category {
+    fn default() -> Self {
+        Category::Unknown
+    }
+}
+
+impl TryFrom<usize> for Category {
+    type Error = &'static str;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Unknown),
+            1 => Ok(Self::Noun),
+            2 => Ok(Self::Adjective),
+            3 => Ok(Self::Verb),
+            4 => Ok(Self::Pronoun),
+            5 => Ok(Self::Adverb),
+            6 => Ok(Self::Preposition),
+            7 => Ok(Self::Conjunction),
+            8 => Ok(Self::Interjection),
+            9 => Ok(Self::Determiner),
+            _ => Err("unknonwn category!"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum Gender {
+    Masculine = 0,
+    Feminine,
+    MasculineOrFeminine,
+    Neuter,
+    None,
+}
+
+impl TryFrom<usize> for Gender {
+    type Error = &'static str;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Masculine),
+            1 => Ok(Self::Feminine),
+            2 => Ok(Self::MasculineOrFeminine),
+            3 => Ok(Self::Neuter),
+            4 => Ok(Self::None),
+            _ => Err("unknonwn gender!"),
+        }
+    }
+}
+
+impl std::fmt::Display for Gender {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Masculine => write!(f, "masculine"),
+            Self::Feminine => write!(f, "feminine"),
+            Self::MasculineOrFeminine => write!(f, "masculine or feminine"),
+            Self::Neuter => write!(f, "neuter"),
+            Self::None => write!(f, "none"),
+        }
+    }
+}
+
+impl std::default::Default for Gender {
+    fn default() -> Self {
+        Gender::None
+    }
+}
+
+#[derive(Debug)]
+pub enum Language {
+    Unknown = 0,
+    Latin,
+}
+
+impl TryFrom<usize> for Language {
+    type Error = &'static str;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Unknown),
+            1 => Ok(Self::Latin),
+            _ => Err("unknonwn language!"),
+        }
+    }
+}
+
+impl std::fmt::Display for Language {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Unknown => write!(f, "unknown"),
+            Self::Latin => write!(f, "latin"),
+        }
+    }
+}
+
+impl std::default::Default for Language {
+    fn default() -> Self {
+        Language::Unknown
+    }
+}
 
 /// Returns the configuration path for the application, and it even creates it
 /// if it doesn't exist already.
@@ -73,24 +206,23 @@ pub fn init_database() -> Result<(), String> {
     }
 }
 
-// #[derive(Debug)]
-// struct Word {
-//     id: i32,
-//     enunciated: String,
-//     particle: String,
-//     language_id: u64,
-//     declension_id: u64,
-//     conjugation_id: u64,
-//     kind: String,
-//     category: String,
-//     regular: bool,
-//     locative: bool,
-//     gender: u32,
-//     suffix: String,
-//     translation: String,
-//     // TODO: datetime
-//     // TODO: jsonb
-// }
+#[derive(Debug)]
+pub struct Word {
+    pub id: i32,
+    pub enunciated: String,
+    pub particle: String,
+    pub language: Language,
+    pub declension_id: Option<usize>,
+    pub conjugation_id: Option<usize>,
+    pub kind: String,
+    pub category: Category,
+    pub regular: bool,
+    pub locative: bool,
+    pub gender: Gender,
+    pub suffix: Option<String>,
+    pub translation: Value,
+    pub succeeded: usize,
+}
 
 pub fn select_enunciated(filter: Option<String>) -> Result<Vec<String>, String> {
     let conn = get_connection()?;
@@ -118,6 +250,54 @@ pub fn select_enunciated(filter: Option<String>) -> Result<Vec<String>, String> 
         res.push(row.get::<usize, String>(0).unwrap());
     }
     Ok(res)
+}
+
+pub fn select_random_words(category: Category, number: usize) -> Result<Vec<Word>, String> {
+    let conn = get_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, enunciated, particle, language_id, declension_id, conjugation_id, \
+                    kind, category, regular, locative, gender, suffix, translation, succeeded \
+             FROM words \
+             WHERE category = ?1 AND translation != '{}' \
+             ORDER BY succeeded ASC, updated_at DESC
+             LIMIT ?2",
+        )
+        .unwrap();
+    let mut it = stmt.query([category as usize, number]).unwrap();
+
+    let mut res = vec![];
+    while let Some(row) = it.next().unwrap() {
+        res.push(Word {
+            id: row.get(0).unwrap(),
+            enunciated: row.get(1).unwrap(),
+            particle: row.get(2).unwrap(),
+            language: row.get::<usize, usize>(3).unwrap().try_into()?,
+            declension_id: row.get(4).unwrap(),
+            conjugation_id: row.get(5).unwrap(),
+            kind: row.get(6).unwrap(),
+            category: row.get::<usize, usize>(7).unwrap().try_into()?,
+            regular: row.get(8).unwrap(),
+            locative: row.get(9).unwrap(),
+            gender: row.get::<usize, usize>(10).unwrap().try_into()?,
+            suffix: row.get(11).unwrap(),
+            translation: serde_json::from_str(&row.get::<usize, String>(12).unwrap()).unwrap(),
+            succeeded: row.get(13).unwrap(),
+        });
+    }
+    Ok(res)
+}
+
+pub fn update_success(word: &Word, success: usize) -> Result<(), String> {
+    let conn = get_connection()?;
+
+    match conn.execute(
+        "UPDATE words SET succeeded = ?1, updated_at = datetime('now') WHERE id = ?2",
+        params![success, word.id],
+    ) {
+        Ok(_) => Ok(()),
+        Err(e) => return Err(format!("could not update '{}': {}", word.enunciated, e)),
+    }
 }
 
 pub fn delete_word(enunciated: &String) -> Result<(), String> {
