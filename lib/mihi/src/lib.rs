@@ -222,6 +222,7 @@ pub struct Word {
     pub suffix: Option<String>,
     pub translation: Value,
     pub succeeded: usize,
+    pub steps: usize,
 }
 
 pub fn select_enunciated(filter: Option<String>) -> Result<Vec<String>, String> {
@@ -257,7 +258,8 @@ pub fn select_random_words(category: Category, number: usize) -> Result<Vec<Word
     let mut stmt = conn
         .prepare(
             "SELECT id, enunciated, particle, language_id, declension_id, conjugation_id, \
-                    kind, category, regular, locative, gender, suffix, translation, succeeded \
+                    kind, category, regular, locative, gender, suffix, translation, \
+                    succeeded, steps \
              FROM words \
              WHERE category = ?1 AND translation != '{}' \
              ORDER BY succeeded ASC, updated_at DESC
@@ -283,17 +285,20 @@ pub fn select_random_words(category: Category, number: usize) -> Result<Vec<Word
             suffix: row.get(11).unwrap(),
             translation: serde_json::from_str(&row.get::<usize, String>(12).unwrap()).unwrap(),
             succeeded: row.get(13).unwrap(),
+            steps: row.get(14).unwrap(),
         });
     }
     Ok(res)
 }
 
-pub fn update_success(word: &Word, success: usize) -> Result<(), String> {
+pub fn update_success(word: &Word, success: usize, steps: usize) -> Result<(), String> {
     let conn = get_connection()?;
 
     match conn.execute(
-        "UPDATE words SET succeeded = ?1, updated_at = datetime('now') WHERE id = ?2",
-        params![success, word.id],
+        "UPDATE words \
+         SET succeeded = ?1, steps = ?2, updated_at = datetime('now') \
+         WHERE id = ?3",
+        params![success, steps, word.id],
     ) {
         Ok(_) => Ok(()),
         Err(e) => return Err(format!("could not update '{}': {}", word.enunciated, e)),

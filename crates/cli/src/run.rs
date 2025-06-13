@@ -1,6 +1,10 @@
 use inquire::Text;
 use mihi::{select_random_words, update_success, Category, Word};
 
+// Maximum number of times a word has to be run in order to increase the number
+// of successful runs.
+const MAX_STEPS: usize = 5;
+
 fn help(msg: Option<&str>) {
     if msg.is_some() {
         println!("{}.\n", msg.unwrap());
@@ -56,11 +60,15 @@ fn run_words(words: Vec<Word>, locale: Locale) -> i32 {
         let found = !answer.is_empty() && tr.split(',').any(|tr| tr.trim().contains(&answer));
 
         if found {
-            let _ = update_success(&word, word.succeeded + 1);
+            if word.steps == MAX_STEPS - 1 {
+                let _ = update_success(&word, word.succeeded + 1, 0);
+            } else {
+                let _ = update_success(&word, word.succeeded, word.steps + 1);
+            }
             println!("\x1b[92m✓ {}\x1b[0m", tr);
         } else {
             if word.succeeded > 0 {
-                let _ = update_success(&word, word.succeeded - 1);
+                let _ = update_success(&word, word.succeeded - 1, 0);
             }
             println!("\x1b[91m❌{}\x1b[0m", tr);
             errors += 1;
