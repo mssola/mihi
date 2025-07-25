@@ -68,6 +68,7 @@ fn help(msg: Option<&str>) {
 
     println!("\nSubcommands:");
     println!("   create\t\tCreate a new word.");
+    println!("   edit\t\t\tEdit information from a word.");
     println!("   ls\t\t\tList the words from the database.");
     println!("   rm\t\t\tRemove a word from the database.");
     println!("   show\t\t\tShow information from a word.");
@@ -375,11 +376,37 @@ fn ls(mut args: IntoIter<String>) -> i32 {
         }
     };
 
-    // TODO: not just the enunciated, but being able to edit
     for enunciated in words {
         println!("{enunciated}");
     }
 
+    0
+}
+
+// Given a search parameter, returns the word that match the enunciate. If
+// multiple words match the same search parameter, then the user is asked to
+// select one from a list of candidates.
+fn select_single_word(search: Option<String>) -> Result<String, String> {
+    let words = select_enunciated(search)?;
+
+    match words.len() {
+        0 => Err("not found".to_string()),
+        1 => Ok(words.first().unwrap().to_owned()),
+        _ => match Select::new("Which word?", words)
+            .with_page_size(20)
+            .prompt()
+        {
+            Ok(choice) => Ok(choice),
+            Err(_) => Err("abort!".to_string()),
+        },
+    }
+}
+
+fn edit(mut _args: IntoIter<String>) -> i32 {
+    0
+}
+
+fn show(mut _args: IntoIter<String>) -> i32 {
     0
 }
 
@@ -389,30 +416,18 @@ fn rm(mut args: IntoIter<String>) -> i32 {
         return 1;
     }
 
-    let words = match select_enunciated(args.next()) {
-        Ok(words) => words,
+    let selection = match select_single_word(args.next()) {
+        Ok(word) => word,
         Err(e) => {
             println!("error: words: {e}");
             return 1;
         }
     };
 
-    let selection: String = match words.len() {
-        0 => {
-            println!("errors: words: not found!");
-            return 1;
-        }
-        1 => words.first().unwrap().to_owned(),
-        _ => match Select::new("Which word?", words).prompt() {
-            Ok(choice) => choice,
-            Err(_) => return 1,
-        },
-    };
-
     let ans = Confirm::new(
         format!("Do you really want to remove '{selection}' from the database?").as_str(),
     )
-    .with_default(true)
+    .with_default(false)
     .prompt();
 
     match ans {
@@ -451,11 +466,17 @@ pub fn run(args: Vec<String>) {
             "create" => {
                 std::process::exit(create(it));
             }
+            "edit" => {
+                std::process::exit(edit(it));
+            }
             "ls" => {
                 std::process::exit(ls(it));
             }
             "rm" => {
                 std::process::exit(rm(it));
+            }
+            "show" => {
+                std::process::exit(show(it));
             }
             _ => {
                 help(Some(
