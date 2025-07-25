@@ -7,7 +7,7 @@ fn help() {
 }
 
 pub fn run(args: Vec<String>) {
-    for arg in args {
+    if let Some(arg) = args.into_iter().next() {
         match arg.as_str() {
             "-h" | "--help" => {
                 help();
@@ -24,12 +24,12 @@ pub fn run(args: Vec<String>) {
         Ok(path) => match std::fs::remove_dir_all(path) {
             Ok(_) => {}
             Err(e) => {
-                println!("error: nuke: {}", e);
+                println!("error: nuke: {e}");
                 std::process::exit(1);
             }
         },
         Err(e) => {
-            println!("error: nuke: {}", e);
+            println!("error: nuke: {e}");
             std::process::exit(1);
         }
     }

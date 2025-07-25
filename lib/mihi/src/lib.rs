@@ -9,7 +9,9 @@ use rusqlite::{params, Connection};
 mod migrate;
 
 #[derive(Debug)]
+#[derive(Default)]
 pub enum Category {
+    #[default]
     Unknown = 0,
     Noun,
     Adjective,
@@ -39,11 +41,6 @@ impl std::fmt::Display for Category {
     }
 }
 
-impl std::default::Default for Category {
-    fn default() -> Self {
-        Category::Unknown
-    }
-}
 
 impl TryFrom<usize> for Category {
     type Error = &'static str;
@@ -66,11 +63,13 @@ impl TryFrom<usize> for Category {
 }
 
 #[derive(Debug)]
+#[derive(Default)]
 pub enum Gender {
     Masculine = 0,
     Feminine,
     MasculineOrFeminine,
     Neuter,
+    #[default]
     None,
 }
 
@@ -101,14 +100,11 @@ impl std::fmt::Display for Gender {
     }
 }
 
-impl std::default::Default for Gender {
-    fn default() -> Self {
-        Gender::None
-    }
-}
 
 #[derive(Debug)]
+#[derive(Default)]
 pub enum Language {
+    #[default]
     Unknown = 0,
     Latin,
 }
@@ -134,11 +130,6 @@ impl std::fmt::Display for Language {
     }
 }
 
-impl std::default::Default for Language {
-    fn default() -> Self {
-        Language::Unknown
-    }
-}
 
 /// Returns the configuration path for the application, and it even creates it
 /// if it doesn't exist already.
@@ -179,11 +170,11 @@ pub fn add_language(language: String) -> Result<(), String> {
 
     let mut file = match File::create(cfg) {
         Ok(f) => f,
-        Err(e) => return Err(format!("could not create file: {}", e)),
+        Err(e) => return Err(format!("could not create file: {e}")),
     };
     match file.write_all(language.as_bytes()) {
         Ok(_) => Ok(()),
-        Err(e) => Err(format!("could not save language '{}': {}", language, e)),
+        Err(e) => Err(format!("could not save language '{language}': {e}")),
     }
 }
 
@@ -194,15 +185,14 @@ pub fn init_database() -> Result<(), String> {
         Ok(handle) => handle,
         Err(e) => {
             return Err(format!(
-                "could not initialize the database: {}",
-                e.to_string()
+                "could not initialize the database: {e}"
             ))
         }
     };
 
     match migrate::init(conn) {
         Ok(_) => Ok(()),
-        Err(e) => Err(format!("bad database schema file: {}", e.to_string())),
+        Err(e) => Err(format!("bad database schema file: {e}")),
     }
 }
 
@@ -248,10 +238,10 @@ pub fn create_word(word: Word) -> Result<(), String> {
             match word.declension_id {
                 Some(id @ 1..7) => {
                     if !DECLENSIONS_WITH_KINDS[id - 1].contains(&word.kind.as_str()) {
-                        return Err(format!("bad kind for declension '{}'", id));
+                        return Err(format!("bad kind for declension '{id}'"));
                     }
                 }
-                Some(val) => return Err(format!("the declension ID '{}' is not valid for nouns", val)),
+                Some(val) => return Err(format!("the declension ID '{val}' is not valid for nouns")),
                 None => return Err(String::from("you have to provide the declension ID for this noun")),
             }
         },
@@ -259,10 +249,10 @@ pub fn create_word(word: Word) -> Result<(), String> {
             match word.declension_id {
                 Some(id @ (1 | 3)) => {
                     if !ADJECTIVE_KINDS[id - 1].contains(&word.kind.as_str()) {
-                        return Err(format!("bad kind for declension '{}'", id));
+                        return Err(format!("bad kind for declension '{id}'"));
                     }
                 }
-                Some(val) => return Err(format!("the declension ID '{}' is not valid for adjectives", val)),
+                Some(val) => return Err(format!("the declension ID '{val}' is not valid for adjectives")),
                 None => return Err(String::from("you have to provide the declension ID for this adjective")),
             }
         },
@@ -360,7 +350,7 @@ pub fn update_success(word: &Word, success: usize, steps: usize) -> Result<(), S
         params![success, steps, word.id],
     ) {
         Ok(_) => Ok(()),
-        Err(e) => return Err(format!("could not update '{}': {}", word.enunciated, e)),
+        Err(e) => Err(format!("could not update '{}': {}", word.enunciated, e)),
     }
 }
 
@@ -372,7 +362,7 @@ pub fn delete_word(enunciated: &String) -> Result<(), String> {
         params![enunciated.as_str()],
     ) {
         Ok(_) => Ok(()),
-        Err(e) => return Err(format!("could not remove '{}': {}", enunciated, e)),
+        Err(e) => Err(format!("could not remove '{enunciated}': {e}")),
     }
 }
 
@@ -381,7 +371,7 @@ fn get_connection() -> Result<rusqlite::Connection, String> {
     match Connection::open(path) {
         Ok(handle) => Ok(handle),
         Err(_) => {
-            return Err(
+            Err(
                 "could not fetch the database. Ensure that you have called 'init' first"
                     .to_string(),
             )

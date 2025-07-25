@@ -43,7 +43,7 @@ pub fn run(args: Vec<String>) {
     match init(language) {
         Ok(_) => {}
         Err(e) => {
-            println!("error: init: {}", e);
+            println!("error: init: {e}");
             std::process::exit(1);
         }
     }

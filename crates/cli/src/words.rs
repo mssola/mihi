@@ -1,4 +1,4 @@
-use inquire::{Confirm, Select, Text, Editor};
+use inquire::{Confirm, Editor, Select, Text};
 use std::vec::IntoIter;
 
 use mihi::{create_word, delete_word, select_enunciated, Category, Gender, Language, Word};
@@ -230,7 +230,7 @@ fn do_create(enunciated: String) -> Result<(), String> {
         return Err("abort!".to_string());
     };
     let Ok(inflection_id) = inflection.parse::<usize>() else {
-        return Err(format!("bad value for inflection ID '{}'", inflection));
+        return Err(format!("bad value for inflection ID '{inflection}'"));
     };
 
     let Ok(kind) = Text::new("Kind:").with_initial_value(&guess.kind).prompt() else {
@@ -244,7 +244,10 @@ fn do_create(enunciated: String) -> Result<(), String> {
         return Err("abort!".to_string());
     };
 
-    let Ok(flags) = Editor::new("Flags:").with_predefined_text(FLAGS_TEXT).prompt() else {
+    let Ok(flags) = Editor::new("Flags:")
+        .with_predefined_text(FLAGS_TEXT)
+        .prompt()
+    else {
         return Err("abort!".to_string());
     };
     let trimmed_flags = trim_flags(flags);
@@ -256,20 +259,36 @@ fn do_create(enunciated: String) -> Result<(), String> {
         return Err("abort!".to_string());
     };
 
-    let word = Word{
+    let word = Word {
         id: 0,
         enunciated: enunciated.clone(),
         particle,
         language: Language::Latin,
-        declension_id: if matches!(category, Category::Verb) { None } else { Some(inflection_id) },
-        conjugation_id: if matches!(category, Category::Verb) { Some(inflection_id) } else { None },
+        declension_id: if matches!(category, Category::Verb) {
+            None
+        } else {
+            Some(inflection_id)
+        },
+        conjugation_id: if matches!(category, Category::Verb) {
+            Some(inflection_id)
+        } else {
+            None
+        },
         kind,
         category,
         regular,
         locative,
         gender,
         suffix: None,
-        translation: serde_json::from_str(format!("{{\"en\":\"{}\", \"ca\":\"{}\"}}", translation_en.trim(), translation_ca.trim()).as_str()).unwrap(),
+        translation: serde_json::from_str(
+            format!(
+                "{{\"en\":\"{}\", \"ca\":\"{}\"}}",
+                translation_en.trim(),
+                translation_ca.trim()
+            )
+            .as_str(),
+        )
+        .unwrap(),
         flags: serde_json::from_str(&trimmed_flags).unwrap(),
         succeeded: 0,
         steps: 0,
@@ -277,9 +296,9 @@ fn do_create(enunciated: String) -> Result<(), String> {
 
     match create_word(word) {
         Ok(_) => {
-            println!("Word '{}' has been successfully created!", enunciated);
+            println!("Word '{enunciated}' has been successfully created!");
             Ok(())
-        },
+        }
         Err(e) => Err(e),
     }
 }
@@ -306,7 +325,7 @@ fn create(args: IntoIter<String>) -> i32 {
         let mut words = match select_enunciated(Some(enunciated.clone())) {
             Ok(words) => words,
             Err(e) => {
-                println!("error: words: {}", e);
+                println!("error: words: {e}");
                 return 1;
             }
         };
@@ -321,7 +340,7 @@ fn create(args: IntoIter<String>) -> i32 {
             // into creating the word.
             3 => {
                 if let Err(e) = do_create(enunciated) {
-                    println!("error: words: {}", e);
+                    println!("error: words: {e}");
                     return 1;
                 }
             }
@@ -331,7 +350,7 @@ fn create(args: IntoIter<String>) -> i32 {
                         return 0;
                     } else if choice == NEW_MESSAGE {
                         if let Err(e) = do_create(enunciated) {
-                            println!("error: words: {}", e);
+                            println!("error: words: {e}");
                             return 1;
                         }
                     }
@@ -351,17 +370,17 @@ fn ls(mut args: IntoIter<String>) -> i32 {
     let words = match select_enunciated(args.next()) {
         Ok(words) => words,
         Err(e) => {
-            println!("error: words: {}", e);
+            println!("error: words: {e}");
             return 1;
         }
     };
 
     // TODO: not just the enunciated, but being able to edit
     for enunciated in words {
-        println!("{}", enunciated);
+        println!("{enunciated}");
     }
 
-    return 0;
+    0
 }
 
 fn rm(mut args: IntoIter<String>) -> i32 {
@@ -373,7 +392,7 @@ fn rm(mut args: IntoIter<String>) -> i32 {
     let words = match select_enunciated(args.next()) {
         Ok(words) => words,
         Err(e) => {
-            println!("error: words: {}", e);
+            println!("error: words: {e}");
             return 1;
         }
     };
@@ -391,20 +410,16 @@ fn rm(mut args: IntoIter<String>) -> i32 {
     };
 
     let ans = Confirm::new(
-        format!(
-            "Do you really want to remove '{}' from the database?",
-            selection
-        )
-        .as_str(),
+        format!("Do you really want to remove '{selection}' from the database?").as_str(),
     )
     .with_default(true)
     .prompt();
 
     match ans {
         Ok(true) => match delete_word(&selection) {
-            Ok(_) => println!("Removed '{}' from the database!", selection),
+            Ok(_) => println!("Removed '{selection}' from the database!"),
             Err(e) => {
-                println!("error: words: {}", e);
+                println!("error: words: {e}");
                 return 1;
             }
         },
@@ -414,7 +429,7 @@ fn rm(mut args: IntoIter<String>) -> i32 {
         Err(_) => return 1,
     }
 
-    return 0;
+    0
 }
 
 pub fn run(args: Vec<String>) {
@@ -427,8 +442,8 @@ pub fn run(args: Vec<String>) {
 
     let mut it = args.into_iter();
 
-    while let Some(first) = it.next() {
-        match first.as_str() {
+    match it.next() {
+        Some(first) => match first.as_str() {
             "-h" | "--help" => {
                 help(None);
                 std::process::exit(0);
@@ -444,10 +459,18 @@ pub fn run(args: Vec<String>) {
             }
             _ => {
                 help(Some(
-                    format!("error: words: unknown flag or command '{}'", first).as_str(),
+                    format!("error: words: unknown flag or command '{first}'").as_str(),
                 ));
                 std::process::exit(1);
             }
+        },
+        None => {
+            help(Some(
+                "error: words: you need to provide a command"
+                    .to_string()
+                    .as_str(),
+            ));
+            std::process::exit(1);
         }
     }
 }

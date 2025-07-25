@@ -51,13 +51,13 @@ fn run_words(words: Vec<Word>, locale: Locale) -> i32 {
 
         println!("Word: {}", word.enunciated);
 
-        let Ok(raw) = Text::new(format!("Translation ({}):", locale).as_str()).prompt() else {
+        let Ok(raw) = Text::new(format!("Translation ({locale}):").as_str()).prompt() else {
             return 1;
         };
         let answer = raw.trim();
 
         let tr = translation.as_str().unwrap_or("");
-        let found = !answer.is_empty() && tr.split(',').any(|tr| tr.trim().contains(&answer));
+        let found = !answer.is_empty() && tr.split(',').any(|tr| tr.trim().contains(answer));
 
         if found {
             if word.steps == MAX_STEPS - 1 {
@@ -65,12 +65,12 @@ fn run_words(words: Vec<Word>, locale: Locale) -> i32 {
             } else {
                 let _ = update_success(&word, word.succeeded, word.steps + 1);
             }
-            println!("\x1b[92m✓ {}\x1b[0m", tr);
+            println!("\x1b[92m✓ {tr}\x1b[0m");
         } else {
             if word.succeeded > 0 {
                 let _ = update_success(&word, word.succeeded - 1, 0);
             }
-            println!("\x1b[91m❌{}\x1b[0m", tr);
+            println!("\x1b[91m❌{tr}\x1b[0m");
             errors += 1;
         }
     }
@@ -122,7 +122,7 @@ pub fn run(args: Vec<String>) {
             }
             _ => {
                 help(Some(
-                    format!("error: run: unknown flag or command '{}'", first).as_str(),
+                    format!("error: run: unknown flag or command '{first}'").as_str(),
                 ));
                 std::process::exit(1);
             }
@@ -144,7 +144,7 @@ pub fn run(args: Vec<String>) {
     match words {
         Ok(list) => std::process::exit(run_words(list, locale)),
         Err(e) => {
-            println!("error: run: {}", e);
+            println!("error: run: {e}");
             std::process::exit(1);
         }
     };
