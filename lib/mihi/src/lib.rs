@@ -221,8 +221,66 @@ pub struct Word {
     pub gender: Gender,
     pub suffix: Option<String>,
     pub translation: Value,
+    pub flags: Value,
     pub succeeded: usize,
     pub steps: usize,
+}
+
+const DECLENSIONS_WITH_KINDS: &[&[&str]] = &[
+    &["a"],
+    &["us", "um", "ius", "er/ir"],
+    &["is", "istem", "pureistem", "one", "onenonistem", "two", "three", "visvis", "sussuis", "bosbovis", "iuppiteriovis"],
+    &["fus", "domusdomus"],
+    &["ies", "es"],
+    &["indeclinable"],
+];
+
+const ADJECTIVE_KINDS: &[&[&str]] = &[
+    &["us", "er/ir"],
+    &[],
+    &["one", "onenonistem", "two", "three", "unusnauta", "unusnautaer/ir", "duo", "tres", "mille"],
+];
+
+/// Creates the given word into the database.
+pub fn create_word(word: Word) -> Result<(), String> {
+    match word.category {
+        Category::Noun => {
+            match word.declension_id {
+                Some(id @ 1..7) => {
+                    if !DECLENSIONS_WITH_KINDS[id - 1].contains(&word.kind.as_str()) {
+                        return Err(format!("bad kind for declension '{}'", id));
+                    }
+                }
+                Some(val) => return Err(format!("the declension ID '{}' is not valid for nouns", val)),
+                None => return Err(String::from("you have to provide the declension ID for this noun")),
+            }
+        },
+        Category::Adjective => {
+            match word.declension_id {
+                Some(id @ (1 | 3)) => {
+                    if !ADJECTIVE_KINDS[id - 1].contains(&word.kind.as_str()) {
+                        return Err(format!("bad kind for declension '{}'", id));
+                    }
+                }
+                Some(val) => return Err(format!("the declension ID '{}' is not valid for adjectives", val)),
+                None => return Err(String::from("you have to provide the declension ID for this adjective")),
+            }
+        },
+        // TODO
+        _ => return Err(format!("you cannot create a word from the '{}' category", word.category)),
+    }
+
+    let conn = get_connection()?;
+    match conn.execute(
+        "INSERT INTO words (enunciated, particle, language_id, declension_id, conjugation_id, kind, category, regular, locative, gender, suffix, flags, translation, updated_at, created_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, datetime('now'), datetime('now'))",
+        params![word.enunciated, word.particle, word.language as usize,
+    word.declension_id, word.conjugation_id, word.kind, word.category as usize,
+    word.regular, word.locative, word.gender as usize, word.suffix,
+    serde_json::to_string(&word.flags).unwrap(), serde_json::to_string(&word.translation).unwrap()]) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("could not create '{}': {}", word.enunciated, e)),
+    }
 }
 
 pub fn select_enunciated(filter: Option<String>) -> Result<Vec<String>, String> {
@@ -286,6 +344,7 @@ pub fn select_random_words(category: Category, number: usize) -> Result<Vec<Word
             translation: serde_json::from_str(&row.get::<usize, String>(12).unwrap()).unwrap(),
             succeeded: row.get(13).unwrap(),
             steps: row.get(14).unwrap(),
+            flags: serde_json::from_str("").unwrap(),
         });
     }
     Ok(res)
