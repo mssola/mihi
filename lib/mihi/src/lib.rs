@@ -563,7 +563,21 @@ impl TryFrom<usize> for ExerciseKind {
             1 => Ok(Self::Translation),
             2 => Ok(Self::Transformation),
             3 => Ok(Self::Numerical),
-            _ => Err("unknonwn kind!"),
+            _ => Err("unknonwn exercise kind"),
+        }
+    }
+}
+
+impl TryFrom<&str> for ExerciseKind {
+    type Error = &'static str;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "pensum" => Ok(Self::Pensum),
+            "translation" => Ok(Self::Translation),
+            "transformation" => Ok(Self::Transformation),
+            "numerical" => Ok(Self::Numerical),
+            _ => Err("unknonwn exercise kind. Available: pensum, translation, transformation and numerical"),
         }
     }
 }
@@ -688,4 +702,54 @@ pub fn delete_exercise(title: &str) -> Result<(), String> {
         Ok(_) => Ok(()),
         Err(e) => Err(format!("could not remove '{title}': {e}")),
     }
+}
+
+// Get a list of exercises sorted by relevance. A maximum of `limit` exercises
+// will be returned, and you can also specify to filter the returned exercises
+// by `kind`.
+pub fn select_relevant_exercises(
+    kind: Option<ExerciseKind>,
+    limit: usize,
+) -> Result<Vec<Exercise>, String> {
+    let conn = get_connection()?;
+
+    let mut stmt;
+    let mut it = match kind {
+        Some(kind) => {
+            stmt = conn
+                .prepare(
+                    "SELECT id, title, enunciate, solution, lessons, kind  \
+                     FROM exercises \
+                     WHERE kind = ?1 \
+                     ORDER BY updated_at DESC \
+                     LIMIT ?2",
+                )
+                .unwrap();
+            stmt.query([kind as usize, limit]).unwrap()
+        }
+        None => {
+            stmt = conn
+                .prepare(
+                    "SELECT id, title, enunciate, solution, lessons, kind  \
+                     FROM exercises \
+                     ORDER BY updated_at DESC \
+                     LIMIT ?1",
+                )
+                .unwrap();
+            stmt.query([limit]).unwrap()
+        }
+    };
+
+    let mut res = vec![];
+    while let Some(row) = it.next().unwrap() {
+        res.push(Exercise {
+            id: row.get(0).unwrap(),
+            title: row.get(1).unwrap(),
+            enunciate: row.get(2).unwrap(),
+            solution: row.get(3).unwrap(),
+            lessons: row.get(4).unwrap(),
+            kind: row.get::<usize, usize>(5).unwrap().try_into()?,
+        });
+    }
+    Ok(res)
 }

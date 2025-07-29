@@ -49,6 +49,7 @@ dependencies = [
  "mihi",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

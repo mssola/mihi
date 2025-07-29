@@ -195,7 +195,7 @@ fn rm(mut args: IntoIter<String>) -> i32 {
 
     match ans {
         Ok(true) => match mihi::delete_exercise(selection) {
-            Ok(_) => println!("Removed '{}' from the database!", selection),
+            Ok(_) => println!("Removed '{selection}' from the database!"),
             Err(e) => {
                 println!("error: words: {e}");
                 return 1;
