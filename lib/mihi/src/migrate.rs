@@ -42,5 +42,28 @@ CREATE UNIQUE INDEX IF NOT EXISTS "index_words_on_enunciated" ON "words" ("enunc
         (),
     )?;
 
+    connection.execute(
+        r#"
+CREATE TABLE IF NOT EXISTS "exercises" (
+       "id" integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+       "title" varchar NOT NULL,
+       "enunciate" text NOT NULL,
+       "solution" text NOT NULL,
+       "lessons" text NOT NULL,
+       "kind" integer DEFAULT 0,
+       "created_at" datetime(6) NOT NULL,
+       "updated_at" datetime(6) NOT NULL
+);
+"#,
+        (),
+    )?;
+
+    connection.execute(
+        r#"
+CREATE UNIQUE INDEX IF NOT EXISTS "index_exercises_on_title" ON "exercises" ("title");
+"#,
+        (),
+    )?;
+
     Ok(0)
 }

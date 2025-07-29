@@ -1,3 +1,4 @@
+mod exercises;
 mod init;
 mod nuke;
 mod run;
@@ -47,6 +48,10 @@ fn main() {
             "init" => {
                 let rest: Vec<String> = args.collect();
                 init::run(rest);
+            }
+            "exercises" => {
+                let rest: Vec<String> = args.collect();
+                exercises::run(rest);
             }
             "nuke" => {
                 let rest: Vec<String> = args.collect();

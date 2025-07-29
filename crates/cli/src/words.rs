@@ -166,7 +166,7 @@ fn trim_flags(given: String) -> String {
     for line in given.lines() {
         let trimmed = line.trim();
 
-        if !line.trim().starts_with('#') {
+        if !trimmed.starts_with('#') {
             res.push_str(trimmed);
         }
     }
@@ -510,7 +510,7 @@ fn edit(mut args: IntoIter<String>) -> i32 {
 }
 
 fn show(mut _args: IntoIter<String>) -> i32 {
-    0
+    todo!()
 }
 
 fn rm(mut args: IntoIter<String>) -> i32 {
