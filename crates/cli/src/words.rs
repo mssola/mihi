@@ -260,6 +260,21 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
         return Err("abort!".to_string());
     };
 
+    let Ok(raw_weight) = Text::new("Weight:")
+        .with_initial_value(word.weight.to_string().as_str())
+        .prompt()
+    else {
+        return Err("abort!".to_string());
+    };
+    let Ok(weight) = raw_weight.parse::<usize>() else {
+        return Err(format!("bad value for inflection ID '{inflection}'"));
+    };
+    if weight > 10 {
+        return Err(format!(
+            "weight has to be an integer between 0 and 10, but {weight} was given"
+        ));
+    }
+
     let raw_flags = serde_json::to_string(&word.flags).unwrap();
 
     let Ok(flags) = Editor::new("Flags:")
@@ -316,6 +331,7 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
         flags: serde_json::from_str(&trimmed_flags).unwrap(),
         succeeded: 0,
         steps: 0,
+        weight,
     })
 }
 

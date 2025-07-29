@@ -204,6 +204,7 @@ pub struct Word {
     pub flags: Value,
     pub succeeded: usize,
     pub steps: usize,
+    pub weight: usize,
 }
 
 impl Word {
@@ -232,6 +233,7 @@ impl Word {
             flags: serde_json::from_str("{}").unwrap(),
             succeeded: 0,
             steps: 0,
+            weight: 5,
         }
     }
 
@@ -324,12 +326,29 @@ pub fn create_word(word: Word) -> Result<(), String> {
 
     let conn = get_connection()?;
     match conn.execute(
-        "INSERT INTO words (enunciated, particle, language_id, declension_id, conjugation_id, kind, category, regular, locative, gender, suffix, flags, translation, updated_at, created_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, datetime('now'), datetime('now'))",
-        params![word.enunciated, word.particle, word.language as usize,
-    word.declension_id, word.conjugation_id, word.kind, word.category as usize,
-    word.regular, word.locative, word.gender as usize, word.suffix,
-    serde_json::to_string(&word.flags).unwrap(), serde_json::to_string(&word.translation).unwrap()]) {
+        "INSERT INTO words (enunciated, particle, language_id, declension_id, \
+                            conjugation_id, kind, category, regular, locative, \
+                            gender, suffix, flags, translation, weight, \
+                            updated_at, created_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, \
+                 datetime('now'), datetime('now'))",
+        params![
+            word.enunciated,
+            word.particle,
+            word.language as usize,
+            word.declension_id,
+            word.conjugation_id,
+            word.kind,
+            word.category as usize,
+            word.regular,
+            word.locative,
+            word.gender as usize,
+            word.suffix,
+            serde_json::to_string(&word.flags).unwrap(),
+            serde_json::to_string(&word.translation).unwrap(),
+            word.weight
+        ],
+    ) {
         Ok(_) => Ok(()),
         Err(e) => Err(format!("could not create '{}': {}", word.enunciated, e)),
     }
@@ -346,7 +365,8 @@ pub fn update_word(word: Word) -> Result<(), String> {
         "UPDATE words \
          SET enunciated = ?2, particle = ?3, declension_id = ?4, conjugation_id = ?5, \
              kind = ?6, category = ?7, regular = ?8, locative = ?9, gender = ?10, \
-             suffix = ?11, flags = ?12, translation = ?13, updated_at = datetime('now') \
+             suffix = ?11, flags = ?12, translation = ?13, weight = ?14, \
+             updated_at = datetime('now') \
          WHERE id = ?1",
         params![
             word.id,
@@ -361,7 +381,8 @@ pub fn update_word(word: Word) -> Result<(), String> {
             word.gender as usize,
             word.suffix,
             serde_json::to_string(&word.flags).unwrap(),
-            serde_json::to_string(&word.translation).unwrap()
+            serde_json::to_string(&word.translation).unwrap(),
+            word.weight
         ],
     ) {
         Ok(_) => Ok(()),
@@ -403,7 +424,7 @@ pub fn find_by(enunciated: &str) -> Result<Word, String> {
         .prepare(
             "SELECT id, enunciated, particle, language_id, declension_id, conjugation_id, \
                     kind, category, regular, locative, gender, suffix, translation, \
-                    succeeded, steps, flags \
+                    succeeded, steps, flags, weight \
              FROM words \
              WHERE enunciated = ?1",
         )
@@ -430,6 +451,7 @@ pub fn find_by(enunciated: &str) -> Result<Word, String> {
                 succeeded: row.get(13).unwrap(),
                 steps: row.get(14).unwrap(),
                 flags: serde_json::from_str(&row.get::<usize, String>(15).unwrap()).unwrap(),
+                weight: row.get(16).unwrap(),
             }),
             None => Err("no words were found with this enunciate".to_string()),
         },
@@ -442,10 +464,10 @@ pub fn select_random_words(category: Category, number: usize) -> Result<Vec<Word
         .prepare(
             "SELECT id, enunciated, particle, language_id, declension_id, conjugation_id, \
                     kind, category, regular, locative, gender, suffix, translation, \
-                    succeeded, steps \
+                    succeeded, steps, flags, weight \
              FROM words \
              WHERE category = ?1 AND translation != '{}' \
-             ORDER BY succeeded ASC, updated_at DESC
+             ORDER BY weight DESC, succeeded ASC, updated_at DESC
              LIMIT ?2",
         )
         .unwrap();
@@ -469,7 +491,8 @@ pub fn select_random_words(category: Category, number: usize) -> Result<Vec<Word
             translation: serde_json::from_str(&row.get::<usize, String>(12).unwrap()).unwrap(),
             succeeded: row.get(13).unwrap(),
             steps: row.get(14).unwrap(),
-            flags: serde_json::from_str("{}").unwrap(),
+            flags: serde_json::from_str(&row.get::<usize, String>(15).unwrap()).unwrap(),
+            weight: row.get(16).unwrap(),
         });
     }
     Ok(res)

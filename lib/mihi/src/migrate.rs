@@ -17,12 +17,16 @@ CREATE TABLE IF NOT EXISTS "words" (
        "gender" integer,
        "created_at" datetime(6) NOT NULL,
        "updated_at" datetime(6) NOT NULL,
-       "last_asked_at" datetime(6) NOT NULL,
        "suffix" varchar,
        "language_id" integer,
-       "translation" json,
+       "succeeded" integer,
+       "steps" integer DEFAULT 0 NOT NULL,
+       "translation" jsonb DEFAULT '{}',
        "pending" boolean DEFAULT 0,
        "flags" jsonb DEFAULT '{}',
+       "weight" integer DEFAULT 0 NOT NULL,
+
+       CHECK (weight >= 0 AND weight <= 10),
 
        FOREIGN KEY ("conjugation_id") REFERENCES "conjugations" ("id"),
        FOREIGN KEY ("declension_id") REFERENCES "declensions" ("id")
