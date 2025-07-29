@@ -8,8 +8,7 @@ use rusqlite::{params, Connection};
 
 mod migrate;
 
-#[derive(Debug)]
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum Category {
     #[default]
     Unknown = 0,
@@ -41,7 +40,6 @@ impl std::fmt::Display for Category {
     }
 }
 
-
 impl TryFrom<usize> for Category {
     type Error = &'static str;
 
@@ -62,8 +60,7 @@ impl TryFrom<usize> for Category {
     }
 }
 
-#[derive(Debug)]
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum Gender {
     Masculine = 0,
     Feminine,
@@ -100,9 +97,7 @@ impl std::fmt::Display for Gender {
     }
 }
 
-
-#[derive(Debug)]
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub enum Language {
     #[default]
     Unknown = 0,
@@ -129,7 +124,6 @@ impl std::fmt::Display for Language {
         }
     }
 }
-
 
 /// Returns the configuration path for the application, and it even creates it
 /// if it doesn't exist already.
@@ -183,11 +177,7 @@ pub fn init_database() -> Result<(), String> {
     let path = get_config_path()?.join("database.sqlite3");
     let conn = match Connection::open(path) {
         Ok(handle) => handle,
-        Err(e) => {
-            return Err(format!(
-                "could not initialize the database: {e}"
-            ))
-        }
+        Err(e) => return Err(format!("could not initialize the database: {e}")),
     };
 
     match migrate::init(conn) {
@@ -196,7 +186,7 @@ pub fn init_database() -> Result<(), String> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Word {
     pub id: i32,
     pub enunciated: String,
@@ -216,10 +206,59 @@ pub struct Word {
     pub steps: usize,
 }
 
+impl Word {
+    pub fn from(
+        particle: String,
+        category: Category,
+        declension_id: Option<usize>,
+        conjugation_id: Option<usize>,
+        gender: Gender,
+        kind: String,
+    ) -> Word {
+        Word {
+            id: 0,
+            enunciated: "".to_string(),
+            particle,
+            category,
+            declension_id,
+            conjugation_id,
+            kind,
+            regular: true,
+            locative: false,
+            gender,
+            suffix: None,
+            language: Language::Latin,
+            translation: serde_json::from_str("{}").unwrap(),
+            flags: serde_json::from_str("{}").unwrap(),
+            succeeded: 0,
+            steps: 0,
+        }
+    }
+
+    pub fn inflection_id(&self) -> usize {
+        if matches!(self.category, Category::Verb) {
+            return self.conjugation_id.unwrap();
+        }
+        self.declension_id.unwrap()
+    }
+}
+
 const DECLENSIONS_WITH_KINDS: &[&[&str]] = &[
     &["a"],
     &["us", "um", "ius", "er/ir"],
-    &["is", "istem", "pureistem", "one", "onenonistem", "two", "three", "visvis", "sussuis", "bosbovis", "iuppiteriovis"],
+    &[
+        "is",
+        "istem",
+        "pureistem",
+        "one",
+        "onenonistem",
+        "two",
+        "three",
+        "visvis",
+        "sussuis",
+        "bosbovis",
+        "iuppiteriovis",
+    ],
     &["fus", "domusdomus"],
     &["ies", "es"],
     &["indeclinable"],
@@ -228,36 +267,59 @@ const DECLENSIONS_WITH_KINDS: &[&[&str]] = &[
 const ADJECTIVE_KINDS: &[&[&str]] = &[
     &["us", "er/ir"],
     &[],
-    &["one", "onenonistem", "two", "three", "unusnauta", "unusnautaer/ir", "duo", "tres", "mille"],
+    &[
+        "one",
+        "onenonistem",
+        "two",
+        "three",
+        "unusnauta",
+        "unusnautaer/ir",
+        "duo",
+        "tres",
+        "mille",
+    ],
 ];
 
 /// Creates the given word into the database.
 pub fn create_word(word: Word) -> Result<(), String> {
     match word.category {
-        Category::Noun => {
-            match word.declension_id {
-                Some(id @ 1..7) => {
-                    if !DECLENSIONS_WITH_KINDS[id - 1].contains(&word.kind.as_str()) {
-                        return Err(format!("bad kind for declension '{id}'"));
-                    }
+        Category::Noun => match word.declension_id {
+            Some(id @ 1..7) => {
+                if !DECLENSIONS_WITH_KINDS[id - 1].contains(&word.kind.as_str()) {
+                    return Err(format!("bad kind for declension '{id}'"));
                 }
-                Some(val) => return Err(format!("the declension ID '{val}' is not valid for nouns")),
-                None => return Err(String::from("you have to provide the declension ID for this noun")),
+            }
+            Some(val) => return Err(format!("the declension ID '{val}' is not valid for nouns")),
+            None => {
+                return Err(String::from(
+                    "you have to provide the declension ID for this noun",
+                ))
             }
         },
-        Category::Adjective => {
-            match word.declension_id {
-                Some(id @ (1 | 3)) => {
-                    if !ADJECTIVE_KINDS[id - 1].contains(&word.kind.as_str()) {
-                        return Err(format!("bad kind for declension '{id}'"));
-                    }
+        Category::Adjective => match word.declension_id {
+            Some(id @ (1 | 3)) => {
+                if !ADJECTIVE_KINDS[id - 1].contains(&word.kind.as_str()) {
+                    return Err(format!("bad kind for declension '{id}'"));
                 }
-                Some(val) => return Err(format!("the declension ID '{val}' is not valid for adjectives")),
-                None => return Err(String::from("you have to provide the declension ID for this adjective")),
+            }
+            Some(val) => {
+                return Err(format!(
+                    "the declension ID '{val}' is not valid for adjectives"
+                ))
+            }
+            None => {
+                return Err(String::from(
+                    "you have to provide the declension ID for this adjective",
+                ))
             }
         },
         // TODO
-        _ => return Err(format!("you cannot create a word from the '{}' category", word.category)),
+        _ => {
+            return Err(format!(
+                "you cannot create a word from the '{}' category",
+                word.category
+            ))
+        }
     }
 
     let conn = get_connection()?;
@@ -270,6 +332,40 @@ pub fn create_word(word: Word) -> Result<(), String> {
     serde_json::to_string(&word.flags).unwrap(), serde_json::to_string(&word.translation).unwrap()]) {
         Ok(_) => Ok(()),
         Err(e) => Err(format!("could not create '{}': {}", word.enunciated, e)),
+    }
+}
+
+pub fn update_word(word: Word) -> Result<(), String> {
+    if word.id == 0 {
+        return Err("invalid word to update; seems it has not been created before".to_string());
+    }
+
+    let conn = get_connection()?;
+
+    match conn.execute(
+        "UPDATE words \
+         SET enunciated = ?2, particle = ?3, declension_id = ?4, conjugation_id = ?5, \
+             kind = ?6, category = ?7, regular = ?8, locative = ?9, gender = ?10, \
+             suffix = ?11, flags = ?12, translation = ?13, updated_at = datetime('now') \
+         WHERE id = ?1",
+        params![
+            word.id,
+            word.enunciated,
+            word.particle,
+            word.declension_id,
+            word.conjugation_id,
+            word.kind,
+            word.category as usize,
+            word.regular,
+            word.locative,
+            word.gender as usize,
+            word.suffix,
+            serde_json::to_string(&word.flags).unwrap(),
+            serde_json::to_string(&word.translation).unwrap()
+        ],
+    ) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("could not update '{}': {}", word.enunciated, e)),
     }
 }
 
@@ -299,6 +395,45 @@ pub fn select_enunciated(filter: Option<String>) -> Result<Vec<String>, String> 
         res.push(row.get::<usize, String>(0).unwrap());
     }
     Ok(res)
+}
+
+pub fn find_by(enunciated: &str) -> Result<Word, String> {
+    let conn = get_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, enunciated, particle, language_id, declension_id, conjugation_id, \
+                    kind, category, regular, locative, gender, suffix, translation, \
+                    succeeded, steps, flags \
+             FROM words \
+             WHERE enunciated = ?1",
+        )
+        .unwrap();
+    let mut it = stmt.query([enunciated]).unwrap();
+
+    match it.next() {
+        Err(_) => Err("no words were found with this enunciate".to_string()),
+        Ok(rows) => match rows {
+            Some(row) => Ok(Word {
+                id: row.get(0).unwrap(),
+                enunciated: row.get(1).unwrap(),
+                particle: row.get(2).unwrap(),
+                language: row.get::<usize, usize>(3).unwrap().try_into()?,
+                declension_id: row.get(4).unwrap(),
+                conjugation_id: row.get(5).unwrap(),
+                kind: row.get(6).unwrap(),
+                category: row.get::<usize, usize>(7).unwrap().try_into()?,
+                regular: row.get(8).unwrap(),
+                locative: row.get(9).unwrap(),
+                gender: row.get::<usize, usize>(10).unwrap().try_into()?,
+                suffix: row.get(11).unwrap(),
+                translation: serde_json::from_str(&row.get::<usize, String>(12).unwrap()).unwrap(),
+                succeeded: row.get(13).unwrap(),
+                steps: row.get(14).unwrap(),
+                flags: serde_json::from_str(&row.get::<usize, String>(15).unwrap()).unwrap(),
+            }),
+            None => Err("no words were found with this enunciate".to_string()),
+        },
+    }
 }
 
 pub fn select_random_words(category: Category, number: usize) -> Result<Vec<Word>, String> {
@@ -334,7 +469,7 @@ pub fn select_random_words(category: Category, number: usize) -> Result<Vec<Word
             translation: serde_json::from_str(&row.get::<usize, String>(12).unwrap()).unwrap(),
             succeeded: row.get(13).unwrap(),
             steps: row.get(14).unwrap(),
-            flags: serde_json::from_str("").unwrap(),
+            flags: serde_json::from_str("{}").unwrap(),
         });
     }
     Ok(res)
@@ -370,11 +505,8 @@ fn get_connection() -> Result<rusqlite::Connection, String> {
     let path = get_config_path()?.join("database.sqlite3");
     match Connection::open(path) {
         Ok(handle) => Ok(handle),
-        Err(_) => {
-            Err(
-                "could not fetch the database. Ensure that you have called 'init' first"
-                    .to_string(),
-            )
-        }
+        Err(_) => Err(
+            "could not fetch the database. Ensure that you have called 'init' first".to_string(),
+        ),
     }
 }

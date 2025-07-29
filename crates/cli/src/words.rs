@@ -1,12 +1,12 @@
 use inquire::{Confirm, Editor, Select, Text};
+use mihi::{Category, Gender, Language, Word};
 use std::vec::IntoIter;
-
-use mihi::{create_word, delete_word, select_enunciated, Category, Gender, Language, Word};
 
 static NEW_MESSAGE: &str = "New word";
 static NEXT_MESSAGE: &str = "Skip this one!";
 static QUIT_MESSAGE: &str = "Quit!";
 
+// Documentation text which is prepended to editing flags.
 static FLAGS_TEXT: &str = r#"# Write a JSON blob with the following allowed keys.
 #
 # => Boolean
@@ -50,11 +50,9 @@ static FLAGS_TEXT: &str = r#"# Write a JSON blob with the following allowed keys
 #     }
 #   }
 # }
-
-{
-}
 "#;
 
+// Show the help message.
 fn help(msg: Option<&str>) {
     if msg.is_some() {
         println!("{}.\n", msg.unwrap());
@@ -74,16 +72,9 @@ fn help(msg: Option<&str>) {
     println!("   show\t\t\tShow information from a word.");
 }
 
-#[derive(Default)]
-struct Guess {
-    particle: String,
-    category: Category,
-    inflection_id: usize,
-    gender: Gender,
-    kind: String,
-}
-
-fn get_initial_guess(value: &str) -> Guess {
+// Given an enunciated value, try to guess a word from it. If that's not
+// possible then an empty word is given.
+fn get_initial_guess(value: &str) -> Word {
     let parts = value.trim().split(',').collect::<Vec<_>>();
 
     if parts.len() == 2 {
@@ -91,73 +82,81 @@ fn get_initial_guess(value: &str) -> Guess {
         let second = parts.last().unwrap();
 
         if first.ends_with('a') && second.ends_with("ae") {
-            return Guess {
-                particle: first[0..first.len() - 1].to_string(),
-                category: Category::Noun,
-                inflection_id: 1,
-                gender: Gender::Feminine,
-                kind: "a".to_string(),
-            };
+            return Word::from(
+                first[0..first.len() - 1].to_string(),
+                Category::Noun,
+                Some(1),
+                None,
+                Gender::Feminine,
+                "a".to_string(),
+            );
         } else if first.ends_with("us") && second.ends_with("ī") {
-            return Guess {
-                particle: first[0..first.len() - 2].to_string(),
-                category: Category::Noun,
-                inflection_id: 2,
-                gender: Gender::Masculine,
-                kind: "us".to_string(),
-            };
+            return Word::from(
+                first[0..first.len() - 2].to_string(),
+                Category::Noun,
+                Some(2),
+                None,
+                Gender::Masculine,
+                "us".to_string(),
+            );
         } else if first.ends_with("um") && second.ends_with("ī") {
-            return Guess {
-                particle: first[0..first.len() - 2].to_string(),
-                category: Category::Noun,
-                inflection_id: 2,
-                gender: Gender::Neuter,
-                kind: "um".to_string(),
-            };
+            return Word::from(
+                first[0..first.len() - 2].to_string(),
+                Category::Noun,
+                Some(2),
+                None,
+                Gender::Neuter,
+                "um".to_string(),
+            );
         } else if first.ends_with("us") && second.ends_with("ūs") {
-            return Guess {
-                particle: first[0..first.len() - 2].to_string(),
-                category: Category::Noun,
-                inflection_id: 4,
-                gender: Gender::Masculine,
-                kind: "fus".to_string(),
-            };
+            return Word::from(
+                first[0..first.len() - 2].to_string(),
+                Category::Noun,
+                Some(4),
+                None,
+                Gender::Masculine,
+                "fus".to_string(),
+            );
         } else if first.ends_with("ū") && second.ends_with("ūs") {
-            return Guess {
-                particle: first[0..first.len() - 1].to_string(),
-                category: Category::Noun,
-                inflection_id: 4,
-                gender: Gender::Masculine,
-                kind: "fus".to_string(),
-            };
+            return Word::from(
+                first[0..first.len() - 1].to_string(),
+                Category::Noun,
+                Some(4),
+                None,
+                Gender::Masculine,
+                "fus".to_string(),
+            );
         } else if first.ends_with("iēs") && second.ends_with("ēī") {
-            return Guess {
-                particle: first[0..first.len() - 3].to_string(),
-                category: Category::Noun,
-                inflection_id: 5,
-                gender: Gender::Masculine,
-                kind: "ies".to_string(),
-            };
+            return Word::from(
+                first[0..first.len() - 3].to_string(),
+                Category::Noun,
+                Some(5),
+                None,
+                Gender::Masculine,
+                "ies".to_string(),
+            );
         } else if first.ends_with("ēs") && second.ends_with("eī") {
-            return Guess {
-                particle: first[0..first.len() - 2].to_string(),
-                category: Category::Noun,
-                inflection_id: 5,
-                gender: Gender::Masculine,
-                kind: "es".to_string(),
-            };
+            return Word::from(
+                first[0..first.len() - 2].to_string(),
+                Category::Noun,
+                Some(5),
+                None,
+                Gender::Masculine,
+                "es".to_string(),
+            );
         } else if second.ends_with("is") {
-            return Guess {
-                particle: second[0..second.len() - 2].to_string(),
-                category: Category::Noun,
-                inflection_id: 5,
-                gender: Gender::Masculine,
-                kind: "es".to_string(),
-            };
+            return Word::from(
+                second[0..second.len() - 2].to_string(),
+                Category::Noun,
+                Some(5),
+                None,
+                Gender::Masculine,
+                "es".to_string(),
+            );
         }
     }
 
-    Guess::default()
+    Word::default()
 }
 
 // Remove comments from the "flags" text that was provided.
@@ -175,11 +174,24 @@ fn trim_flags(given: String) -> String {
     res
 }
 
-fn do_create(enunciated: String) -> Result<(), String> {
-    let guess = get_initial_guess(enunciated.as_str());
+// Get the translation from `word.translated` which matches the given language
+// `key`. If that cannot be found, or for some reason is not a String, then an
+// error is returned.
+fn get_translated<'a>(word: &'a Word, key: &'a str) -> Result<&'a String, String> {
+    match word.translation.get(key) {
+        Some(value) => match value {
+            serde_json::Value::String(s) => Ok(s),
+            _ => Err("unexpected key type".to_string()),
+        },
+        None => Err("key does not exist".to_string()),
+    }
+}
 
+// Interactively ask the user to provide information for a word by the given
+// `enunciated`. The default values will be based on the given `word` parameter.
+fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String> {
     let Ok(particle) = Text::new("Particle:")
-        .with_initial_value(&guess.particle)
+        .with_initial_value(&word.particle)
         .prompt()
     else {
         return Err("abort!".to_string());
@@ -198,7 +210,7 @@ fn do_create(enunciated: String) -> Result<(), String> {
         Category::Determiner,
     ];
     let Ok(category) = Select::new("Category:", categories)
-        .with_starting_cursor(guess.category as usize)
+        .with_starting_cursor(word.category as usize)
         .prompt()
     else {
         return Err("abort!".to_string());
@@ -214,7 +226,7 @@ fn do_create(enunciated: String) -> Result<(), String> {
     let gender = match category {
         Category::Noun => {
             match Select::new("Gender:", genders)
-                .with_starting_cursor(guess.gender as usize)
+                .with_starting_cursor(word.gender as usize)
                 .prompt()
             {
                 Ok(selection) => selection,
@@ -224,8 +236,12 @@ fn do_create(enunciated: String) -> Result<(), String> {
         _ => Gender::None,
     };
 
+    let Ok(kind) = Text::new("Kind:").with_initial_value(&word.kind).prompt() else {
+        return Err("abort!".to_string());
+    };
+
     let Ok(inflection) = Text::new("Inflection:")
-        .with_initial_value(&guess.inflection_id.to_string())
+        .with_initial_value(word.inflection_id().to_string().as_str())
         .prompt()
     else {
         return Err("abort!".to_string());
@@ -234,35 +250,42 @@ fn do_create(enunciated: String) -> Result<(), String> {
         return Err(format!("bad value for inflection ID '{inflection}'"));
     };
 
-    let Ok(kind) = Text::new("Kind:").with_initial_value(&guess.kind).prompt() else {
+    let Ok(regular) = Confirm::new("Regular:").with_default(word.regular).prompt() else {
+        return Err("abort!".to_string());
+    };
+    let Ok(locative) = Confirm::new("Locative:")
+        .with_default(word.locative)
+        .prompt()
+    else {
         return Err("abort!".to_string());
     };
 
-    let Ok(regular) = Confirm::new("Regular:").with_default(true).prompt() else {
-        return Err("abort!".to_string());
-    };
-    let Ok(locative) = Confirm::new("Locative:").with_default(false).prompt() else {
-        return Err("abort!".to_string());
-    };
+    let raw_flags = serde_json::to_string(&word.flags).unwrap();
 
     let Ok(flags) = Editor::new("Flags:")
-        .with_predefined_text(FLAGS_TEXT)
+        .with_predefined_text(format!("{FLAGS_TEXT}\n{raw_flags}").as_str())
         .prompt()
     else {
         return Err("abort!".to_string());
     };
     let trimmed_flags = trim_flags(flags);
 
-    let Ok(translation_en) = Text::new("Translation (english):").prompt() else {
+    let Ok(translation_en) = Text::new("Translation (english):")
+        .with_initial_value(get_translated(&word, "en").unwrap_or(&String::from("")))
+        .prompt()
+    else {
         return Err("abort!".to_string());
     };
-    let Ok(translation_ca) = Text::new("Translation (catalan):").prompt() else {
+    let Ok(translation_ca) = Text::new("Translation (catalan):")
+        .with_initial_value(get_translated(&word, "ca").unwrap_or(&String::from("")))
+        .prompt()
+    else {
         return Err("abort!".to_string());
     };
 
-    let word = Word {
-        id: 0,
-        enunciated: enunciated.clone(),
+    Ok(Word {
+        id: word.id,
+        enunciated,
         particle,
         language: Language::Latin,
         declension_id: if matches!(category, Category::Verb) {
@@ -293,9 +316,17 @@ fn do_create(enunciated: String) -> Result<(), String> {
         flags: serde_json::from_str(&trimmed_flags).unwrap(),
         succeeded: 0,
         steps: 0,
-    };
+    })
+}
 
-    match create_word(word) {
+// Interactively ask the user for the given `enunciated`, build up a Word object
+// from it, and insert it into the database.
+fn do_create(enunciated: String) -> Result<(), String> {
+    let mut guess = get_initial_guess(enunciated.as_str());
+    guess.enunciated = enunciated.clone();
+
+    let word = ask_for_word_based_on(enunciated.clone(), guess)?;
+    match mihi::create_word(word) {
         Ok(_) => {
             println!("Word '{enunciated}' has been successfully created!");
             Ok(())
@@ -323,7 +354,7 @@ fn create(args: IntoIter<String>) -> i32 {
 
         // Now we try to fetch whether the word already existed, by doing a
         // general search on the database.
-        let mut words = match select_enunciated(Some(enunciated.clone())) {
+        let mut words = match mihi::select_enunciated(Some(enunciated.clone())) {
             Ok(words) => words,
             Err(e) => {
                 println!("error: words: {e}");
@@ -362,13 +393,14 @@ fn create(args: IntoIter<String>) -> i32 {
     }
 }
 
+// TODO: accept a --raw flag, which is implied on pipe
 fn ls(mut args: IntoIter<String>) -> i32 {
     if args.len() > 1 {
         help(Some("error: words: too many filters"));
         return 1;
     }
 
-    let words = match select_enunciated(args.next()) {
+    let words = match mihi::select_enunciated(args.next()) {
         Ok(words) => words,
         Err(e) => {
             println!("error: words: {e}");
@@ -387,7 +419,7 @@ fn ls(mut args: IntoIter<String>) -> i32 {
 // multiple words match the same search parameter, then the user is asked to
 // select one from a list of candidates.
 fn select_single_word(search: Option<String>) -> Result<String, String> {
-    let words = select_enunciated(search)?;
+    let words = mihi::select_enunciated(search)?;
 
     match words.len() {
         0 => Err("not found".to_string()),
@@ -402,8 +434,63 @@ fn select_single_word(search: Option<String>) -> Result<String, String> {
     }
 }
 
-fn edit(mut _args: IntoIter<String>) -> i32 {
-    0
+fn edit(mut args: IntoIter<String>) -> i32 {
+    if args.len() > 1 {
+        help(Some(
+            "error: words: only one argument. If it's an enunciate, wrap it in double quotes",
+        ));
+        return 1;
+    }
+
+    // Only one word can be modified at a time.
+    let enunciated = match select_single_word(args.next()) {
+        Ok(word) => word,
+        Err(e) => {
+            println!("error: words: {e}");
+            return 1;
+        }
+    };
+
+    // Fetch the word object for it which will serve as the initial values.
+    let word = match mihi::find_by(enunciated.as_str()) {
+        Ok(word) => word,
+        Err(e) => {
+            println!("error: words: {e}");
+            return 1;
+        }
+    };
+
+    // The enunciate might change, let's ask for it again. This way we get the
+    // same experience as with the 'create' command.
+    let Ok(enunciated) = Text::new("Enunciated:")
+        .with_initial_value(&word.enunciated)
+        .prompt()
+    else {
+        return 1;
+    };
+    if enunciated.trim().is_empty() {
+        return 0;
+    }
+
+    // And ask again column by column to check for changes.
+    let updated = match ask_for_word_based_on(enunciated.clone(), word) {
+        Ok(word) => word,
+        Err(e) => {
+            println!("error: words: {e}");
+            return 1;
+        }
+    };
+
+    match mihi::update_word(updated) {
+        Ok(_) => {
+            println!("Word '{enunciated}' has been updated!");
+            0
+        }
+        Err(e) => {
+            println!("error: words: {e}");
+            1
+        }
+    }
 }
 
 fn show(mut _args: IntoIter<String>) -> i32 {
@@ -431,7 +518,7 @@ fn rm(mut args: IntoIter<String>) -> i32 {
     .prompt();
 
     match ans {
-        Ok(true) => match delete_word(&selection) {
+        Ok(true) => match mihi::delete_word(&selection) {
             Ok(_) => println!("Removed '{selection}' from the database!"),
             Err(e) => {
                 println!("error: words: {e}");
