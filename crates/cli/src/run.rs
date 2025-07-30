@@ -1,5 +1,5 @@
 use inquire::{Confirm, Editor, Text};
-use mihi::{select_random_words, update_success, Category, Exercise, ExerciseKind, Word};
+use mihi::{select_relevant_words, update_success, Category, Exercise, ExerciseKind, Word};
 use std::env;
 use std::fs;
 use std::io::Write;
@@ -21,6 +21,7 @@ fn help(msg: Option<&str>) {
     println!("Options:");
     println!("   -c, --category <CATEGORY>\tOnly ask for words on the given <CATEGORY>.");
     println!("   -e, --exercises\t\tOnly practice with exercises.");
+    println!("   -f, --flag\t\tFilter words by a boolean flag. Multiple flags can be provided.");
     println!("   -h, --help\t\t\tPrint this message.");
     println!("   -k, --kind <KIND>\t\tOnly ask for exercises for the given <KIND>.");
 }
@@ -95,14 +96,14 @@ fn run_words(words: Vec<Word>, locale: &Locale) -> i32 {
 
 // Returns a vector of words which contain a randomized set of words from
 // different categories.
-fn select_general_words() -> Result<Vec<Word>, String> {
-    let mut res = select_random_words(Category::Noun, 4)?;
-    res.append(&mut select_random_words(Category::Adjective, 2)?);
-    res.append(&mut select_random_words(Category::Verb, 4)?);
-    res.append(&mut select_random_words(Category::Pronoun, 1)?);
-    res.append(&mut select_random_words(Category::Adverb, 2)?);
-    res.append(&mut select_random_words(Category::Preposition, 1)?);
-    res.append(&mut select_random_words(Category::Conjunction, 1)?);
+fn select_general_words(flags: &Vec<String>) -> Result<Vec<Word>, String> {
+    let mut res = select_relevant_words(Category::Noun, flags, 4)?;
+    res.append(&mut select_relevant_words(Category::Adjective, flags, 2)?);
+    res.append(&mut select_relevant_words(Category::Verb, flags, 4)?);
+    res.append(&mut select_relevant_words(Category::Pronoun, flags, 1)?);
+    res.append(&mut select_relevant_words(Category::Adverb, flags, 2)?);
+    res.append(&mut select_relevant_words(Category::Preposition, flags, 1)?);
+    res.append(&mut select_relevant_words(Category::Conjunction, flags, 1)?);
     Ok(res)
 }
 
@@ -143,7 +144,9 @@ fn is_executable(bin: &str) -> bool {
 // Returns the string for the name of the command that should be used to show
 // diffs.
 fn diff_tool() -> Option<&'static str> {
-    ["difft", "vimdiff", "diff"].into_iter().find(|&cmd| is_executable(cmd))
+    ["difft", "vimdiff", "diff"]
+        .into_iter()
+        .find(|&cmd| is_executable(cmd))
 }
 
 // Perform a diff with the `given` and the `expected` answers for an exercise
@@ -225,6 +228,7 @@ pub fn run(args: Vec<String>) {
     let mut category = None;
     let mut kind: Option<ExerciseKind> = None;
     let mut exercises_only = false;
+    let mut flags: Vec<String> = vec![];
 
     while let Some(first) = it.next() {
         match first.as_str() {
@@ -262,6 +266,34 @@ pub fn run(args: Vec<String>) {
             "-e" | "--exercises" => {
                 exercises_only = true;
             }
+            "-f" | "--flag" => match it.next() {
+                Some(flag) => {
+                    if mihi::is_valid_word_flag(flag.as_str()) {
+                        if flags.iter().any(|s| s.as_str() == flag) {
+                            println!(
+                                "warning: practice: flag '{flag}' was provided multiple times"
+                            );
+                        } else {
+                            flags.push(flag);
+                        }
+                    } else {
+                        let supported = mihi::BOOLEAN_FLAGS.join(", ");
+                        help(Some(
+                            format!(
+                                "error: practice: unknown flag value '{flag}'. You have to pick between: {supported}"
+                            )
+                            .as_str(),
+                        ));
+                        std::process::exit(1);
+                    }
+                }
+                None => {
+                    help(Some(
+                        "error: practice: you have to provide a value for the flag",
+                    ));
+                    std::process::exit(1);
+                }
+            },
             "-k" | "--kind" => {
                 if kind.is_some() {
                     help(Some(
@@ -273,9 +305,7 @@ pub fn run(args: Vec<String>) {
                     Some(k) => {
                         kind = match k.trim().to_lowercase().as_str().try_into() {
                             Ok(k) => Some(k),
-                            Err(e) => {
-                                return help(Some(format!("error: practice: {e}").as_str()))
-                            }
+                            Err(e) => return help(Some(format!("error: practice: {e}").as_str())),
                         };
                     }
                     None => {
@@ -301,8 +331,8 @@ pub fn run(args: Vec<String>) {
     };
 
     let words = match category {
-        Some(cat) => select_random_words(cat, 15),
-        None => select_general_words(),
+        Some(cat) => select_relevant_words(cat, &flags, 15),
+        None => select_general_words(&flags),
     };
 
     let exercises = match mihi::select_relevant_exercises(kind, if exercises_only { 5 } else { 1 })

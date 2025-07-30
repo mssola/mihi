@@ -282,6 +282,38 @@ const ADJECTIVE_KINDS: &[&[&str]] = &[
     ],
 ];
 
+/// List of boolean flags supported for words.
+pub const BOOLEAN_FLAGS: &[&str] = &[
+    "deponent",
+    "onlysingular",
+    "onlyplural",
+    "contracted_root",
+    "nonpositive",
+    "compsup_prefix",
+    "indeclinable",
+    "irregularsup",
+    "nopassive",
+    "nosupine",
+    "noperfect",
+    "nogerundive",
+    "impersonal",
+    "impersonalpassive",
+    "noimperative",
+    "noinfinitive",
+    "shortimperative",
+    "onlythirdpassive",
+    "enclitic",
+    "notcomparable",
+    "onlyperfect",
+    "semideponent",
+    "contracted_vocative",
+];
+
+/// Returns true if the given flag is supported by this application.
+pub fn is_valid_word_flag(flag: &str) -> bool {
+    BOOLEAN_FLAGS.contains(&flag)
+}
+
 /// Creates the given word into the database.
 pub fn create_word(word: Word) -> Result<(), String> {
     match word.category {
@@ -458,17 +490,44 @@ pub fn find_by(enunciated: &str) -> Result<Word, String> {
     }
 }
 
-pub fn select_random_words(category: Category, number: usize) -> Result<Vec<Word>, String> {
+// Builds up a chain of OR clauses that check whether either of the given
+// `flags` are set for a row. If no flags are given, then an empty string is
+// returned. Otherwise the string is prepended by an "AND" clause, meaning that
+// it expects the caller to have other clauses before this one.
+fn flags_clause(flags: &Vec<String>) -> String {
+    if flags.is_empty() {
+        return "".to_string();
+    }
+
+    let mut clauses: Vec<String> = vec![];
+    for flag in flags {
+        clauses.push(format!("json_extract(flags, '$.{flag}') = 1"));
+    }
+
+    "AND (".to_owned() + &clauses.join(" OR ") + ")"
+}
+
+// Select a maximum of `number` words which match a given word `category` and
+// have set one of the given boolean `flags`.
+pub fn select_relevant_words(
+    category: Category,
+    flags: &Vec<String>,
+    number: usize,
+) -> Result<Vec<Word>, String> {
     let conn = get_connection()?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, enunciated, particle, language_id, declension_id, conjugation_id, \
+            format!(
+                "SELECT id, enunciated, particle, language_id, declension_id, conjugation_id, \
                     kind, category, regular, locative, gender, suffix, translation, \
                     succeeded, steps, flags, weight \
-             FROM words \
-             WHERE category = ?1 AND translation != '{}' \
-             ORDER BY weight DESC, succeeded ASC, updated_at DESC
-             LIMIT ?2",
+                 FROM words \
+                 WHERE category = ?1 AND translation != '{{}}' {} \
+                 ORDER BY weight DESC, succeeded ASC, updated_at DESC
+                 LIMIT ?2",
+                flags_clause(flags)
+            )
+            .as_str(),
         )
         .unwrap();
     let mut it = stmt.query([category as usize, number]).unwrap();
