@@ -1,5 +1,7 @@
 mod exercises;
+mod inflection;
 mod init;
+mod locale;
 mod nuke;
 mod run;
 mod words;

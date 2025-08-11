@@ -2,6 +2,8 @@ A self assessment tool for learning languages.
 
 **UNDER CONSTRUCTION**
 
+Set the `MIHI_DATABASE` environment variable to `test.sqlite3`.
+
 ## License
 
 This repository holds two licenses, as you can also note on the `Cargo.toml`

@@ -1,3 +1,6 @@
+use crate::inflection::print_full_inflection_for;
+use crate::locale::current_locale;
+
 use inquire::{Confirm, Editor, Select, Text};
 use mihi::{Category, Gender, Language, Word};
 use std::vec::IntoIter;
@@ -148,15 +151,22 @@ fn get_initial_guess(value: &str) -> Word {
             return Word::from(
                 second[0..second.len() - 2].to_string(),
                 Category::Noun,
-                Some(5),
+                Some(3),
                 None,
                 Gender::Masculine,
-                "es".to_string(),
+                "is".to_string(),
             );
         }
     }
 
-    Word::default()
+    Word::from(
+        value.to_string(),
+        Category::Unknown,
+        None,
+        None,
+        Gender::None,
+        String::from("-"),
+    )
 }
 
 // Remove comments from the "flags" text that was provided.
@@ -236,18 +246,32 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
         _ => Gender::None,
     };
 
-    let Ok(kind) = Text::new("Kind:").with_initial_value(&word.kind).prompt() else {
-        return Err("abort!".to_string());
+    let inflection_id = match category {
+        Category::Noun | Category::Adjective => {
+            let Ok(inflection) = Text::new("Inflection:")
+                .with_initial_value(word.inflection_id().unwrap_or(0).to_string().as_str())
+                .prompt()
+            else {
+                return Err("abort!".to_string());
+            };
+            let Ok(inflection_id) = inflection.parse::<usize>() else {
+                return Err(format!("bad value for inflection ID '{inflection}'"));
+            };
+            Some(inflection_id)
+        }
+        _ => None,
     };
 
-    let Ok(inflection) = Text::new("Inflection:")
-        .with_initial_value(word.inflection_id().to_string().as_str())
-        .prompt()
-    else {
-        return Err("abort!".to_string());
-    };
-    let Ok(inflection_id) = inflection.parse::<usize>() else {
-        return Err(format!("bad value for inflection ID '{inflection}'"));
+    // TODO: refine guess once the inflection is known: select from possible values.
+    let kind = match category {
+        Category::Noun | Category::Adjective => {
+            let Ok(kind) = Text::new("Kind:").with_initial_value(&word.kind).prompt() else {
+                return Err("abort!".to_string());
+            };
+            kind.trim().to_string()
+        }
+        Category::Verb => String::from("verb"),
+        _ => String::from("-"),
     };
 
     let Ok(regular) = Confirm::new("Regular:").with_default(word.regular).prompt() else {
@@ -267,7 +291,10 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
         return Err("abort!".to_string());
     };
     let Ok(weight) = raw_weight.parse::<usize>() else {
-        return Err(format!("bad value for inflection ID '{inflection}'"));
+        return Err(format!(
+            "bad value for inflection ID '{}'",
+            inflection_id.unwrap_or(0)
+        ));
     };
     if weight > 10 {
         return Err(format!(
@@ -306,10 +333,10 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
         declension_id: if matches!(category, Category::Verb) {
             None
         } else {
-            Some(inflection_id)
+            inflection_id
         },
         conjugation_id: if matches!(category, Category::Verb) {
-            Some(inflection_id)
+            inflection_id
         } else {
             None
         },
@@ -409,7 +436,6 @@ fn create(args: IntoIter<String>) -> i32 {
     }
 }
 
-// TODO: accept a --raw flag, which is implied on pipe
 fn ls(mut args: IntoIter<String>) -> i32 {
     if args.len() > 1 {
         help(Some("error: words: too many filters"));
@@ -509,8 +535,128 @@ fn edit(mut args: IntoIter<String>) -> i32 {
     }
 }
 
-fn show(mut _args: IntoIter<String>) -> i32 {
-    todo!()
+// Returns a string with a more human-readable declension kind.
+fn humanize_kind(kind: &str) -> &str {
+    match kind {
+        // Noun
+        "a" => "-a",
+        "us" => "-us",
+        "er/ir" => "-er/-ir",
+        "um" => "-um",
+        "ius" => "-ius; like 'fīlius'",
+        "is" => "-is",
+        "istem" => "i-stem; '-i-' also in the genitive plural",
+        "pureistem" => "pure i-stem; '-i-' also in the ablative singular",
+        "visvis" => "irregular 'vīs, vīs'",
+        "sussuis" => "irregular 'sūs, suis'",
+        "bosbovis" => "irregular 'bōs, bovis'",
+        "iuppiteriovis" => "irregular 'Iuppiter, Iovis'",
+        "fus" => "-u-",
+        "domusdomus" => "irregular 'domus, domūs/domī'",
+        "ies" => "-iēs; like 'diēs, diēī'",
+        "es" => "-ēs; like 'rēs, reī'",
+        "indeclinable" => "indeclinable",
+
+        // Adjective
+        "one" => "one termination adjective",
+        "onenonistem" => "one termination adjective; non i-stem like 'melior, melius'",
+        "two" => "two termination adjective",
+        "three" => "three termination adjective",
+        "unusnauta" => "'ūnus nauta' like 'ūnus, ūna, ūnum'",
+        "unusnautaer/ir" => "'ūnus nauta' like 'neuter, neutra, neutrum'",
+        "duo" => "number 'duo, duae, duo'",
+        "tres" => "number 'trēs, trēs, tria'",
+        "mille" => "number 'mīlle, mīlle'",
+
+        // Others
+        "egonos" => "'ego, nōs'",
+        "demonstrative-weak" => "weak demonstrative",
+        "demonstrative-proximal" => "proximal demonstrative",
+        "demonstrative-distal" => "distal demonstrative",
+        "demonstrative-medial" => "medial demonstrative",
+        "demonstrative-idem" => "'īdem, eadem, idem' demonstrative",
+        "tuvos" => "'tū, vōs'",
+        "sesui" => "'sē, suī'",
+
+        _ => kind,
+    }
+}
+
+fn show_info(word: Word) -> Result<(), String> {
+    // Title.
+    match word.gender {
+        Gender::None => println!("Word: {} ({})", word.enunciated, word.category),
+        _ => println!(
+            "Word: {} ({} {})",
+            word.enunciated,
+            word.gender.abbrev(),
+            word.category
+        ),
+    }
+
+    // Conjugation, declension + kind.
+    match word.conjugation_id {
+        Some(id) => println!("Conjugation: {}", id),
+        None => match word.declension_id {
+            Some(did) => {
+                if did > 5 {
+                    println!("Declension: {}", humanize_kind(&word.kind));
+                } else {
+                    println!(
+                        "Declension: {} ({})",
+                        word.declension_id.unwrap(),
+                        humanize_kind(&word.kind)
+                    );
+                }
+            }
+            None => {}
+        },
+    };
+
+    // Show translation if available.
+    let locale = current_locale();
+    if let Some(translation) = word.translation.get(locale.to_code()) {
+        let s = translation.as_str().unwrap_or("");
+        if !s.is_empty() {
+            println!("Translation ({}): {}.", locale.to_code(), s);
+        }
+    }
+
+    print_full_inflection_for(word)?;
+
+    Ok(())
+}
+
+fn show(mut args: IntoIter<String>) -> i32 {
+    if args.len() > 1 {
+        help(Some(
+            "error: words: only one argument. If it's an enunciate, wrap it in double quotes",
+        ));
+        return 1;
+    }
+
+    let enunciated = match select_single_word(args.next()) {
+        Ok(word) => word,
+        Err(e) => {
+            println!("error: words: {e}.");
+            return 1;
+        }
+    };
+
+    let word = match mihi::find_by(enunciated.as_str()) {
+        Ok(word) => word,
+        Err(e) => {
+            println!("error: words: {e}.");
+            return 1;
+        }
+    };
+
+    if let Err(e) = show_info(word) {
+        println!("error: words: {e}.");
+        return 1;
+    }
+
+    0
 }
 
 fn rm(mut args: IntoIter<String>) -> i32 {

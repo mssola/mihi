@@ -21,7 +21,12 @@ jobs:
           rustup default stable
 
       - name: Run tests
-        run: cargo test --verbose
+        env:
+          MIHI_DATABASE: test.sqlite3
+        run: |
+          mkdir -p $HOME/.config/mihi
+          cp testdata/test.sqlite3 $HOME/.config/mihi/
+          cargo test --verbose
 
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features
