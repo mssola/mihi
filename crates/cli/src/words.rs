@@ -206,6 +206,7 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
     else {
         return Err("abort!".to_string());
     };
+    let particle = particle.trim().to_string();
 
     let categories = vec![
         Category::Unknown,
@@ -261,6 +262,7 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
         }
         _ => None,
     };
+    let kind = kind.trim().to_string();
 
     // TODO: refine guess once the inflection is known: select from possible values.
     let kind = match category {
@@ -366,7 +368,7 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
 // from it, and insert it into the database.
 fn do_create(enunciated: String) -> Result<(), String> {
     let mut guess = get_initial_guess(enunciated.as_str());
-    guess.enunciated = enunciated.clone();
+    guess.enunciated = enunciated.trim().to_string();
 
     let word = ask_for_word_based_on(enunciated.clone(), guess)?;
     match mihi::create_word(word) {

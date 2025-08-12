@@ -402,12 +402,12 @@ pub fn create_word(word: Word) -> Result<(), String> {
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, \
                  datetime('now'), datetime('now'))",
         params![
-            word.enunciated,
-            word.particle,
+            word.enunciated.trim(),
+            word.particle.trim(),
             word.language as usize,
             word.declension_id,
             word.conjugation_id,
-            word.kind,
+            word.kind.trim(),
             word.category as usize,
             word.regular,
             word.locative,
