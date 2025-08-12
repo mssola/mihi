@@ -397,9 +397,9 @@ pub fn create_word(word: Word) -> Result<(), String> {
     match conn.execute(
         "INSERT INTO words (enunciated, particle, language_id, declension_id, \
                             conjugation_id, kind, category, regular, locative, \
-                            gender, suffix, flags, translation, weight, \
+                            gender, suffix, flags, translation, weight, succeeded, \
                             updated_at, created_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, \
                  datetime('now'), datetime('now'))",
         params![
             word.enunciated,
@@ -415,7 +415,8 @@ pub fn create_word(word: Word) -> Result<(), String> {
             word.suffix,
             serde_json::to_string(&word.flags).unwrap(),
             serde_json::to_string(&word.translation).unwrap(),
-            word.weight
+            word.weight,
+            0
         ],
     ) {
         Ok(_) => Ok(()),
