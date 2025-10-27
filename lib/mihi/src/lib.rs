@@ -375,6 +375,19 @@ pub fn create_word(word: Word) -> Result<(), String> {
                 ))
             }
         },
+        Category::Verb => match word.conjugation_id {
+            Some(1..6) => {
+                if word.kind.as_str() != "verb" {
+                    return Err(format!("bad kind for verb"));
+                }
+            }
+            Some(val) => return Err(format!("the conjugation ID '{val}' is not valid")),
+            None => {
+                return Err(String::from(
+                    "you have to provide the conjugation ID for this verb",
+                ))
+            }
+        },
         Category::Adverb
         | Category::Preposition
         | Category::Conjunction
@@ -384,8 +397,7 @@ pub fn create_word(word: Word) -> Result<(), String> {
                 return Err(format!("no inflection allowed for '{}'", word.category));
             }
         }
-        // TODO
-        _ => {
+        Category::Unknown | Category::Pronoun => {
             return Err(format!(
                 "you cannot create a word from the '{}' category",
                 word.category

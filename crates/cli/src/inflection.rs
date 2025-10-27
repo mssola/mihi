@@ -125,8 +125,8 @@ pub fn print_full_inflection_for(word: Word) -> Result<(), String> {
     match word.category {
         Category::Noun => print_noun_inflection(&word)?,
         Category::Adjective => print_adjective_inflection(&word)?,
-        Category::Verb => todo!(),
-        Category::Pronoun => todo!(),
+        Category::Verb => {}    // TODO
+        Category::Pronoun => {} // TODO
         Category::Adverb
         | Category::Preposition
         | Category::Conjunction

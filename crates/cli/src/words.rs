@@ -248,7 +248,7 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
     };
 
     let inflection_id = match category {
-        Category::Noun | Category::Adjective => {
+        Category::Noun | Category::Adjective | Category::Verb => {
             let Ok(inflection) = Text::new("Inflection:")
                 .with_initial_value(word.inflection_id().unwrap_or(0).to_string().as_str())
                 .prompt()
@@ -262,7 +262,6 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
         }
         _ => None,
     };
-    let kind = kind.trim().to_string();
 
     // TODO: refine guess once the inflection is known: select from possible values.
     let kind = match category {
@@ -276,14 +275,28 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
         _ => String::from("-"),
     };
 
-    let Ok(regular) = Confirm::new("Regular:").with_default(word.regular).prompt() else {
-        return Err("abort!".to_string());
+    let regular = if matches!(
+        category,
+        Category::Noun | Category::Adjective | Category::Verb
+    ) {
+        let Ok(regular) = Confirm::new("Regular:").with_default(word.regular).prompt() else {
+            return Err("abort!".to_string());
+        };
+        regular
+    } else {
+        true
     };
-    let Ok(locative) = Confirm::new("Locative:")
-        .with_default(word.locative)
-        .prompt()
-    else {
-        return Err("abort!".to_string());
+
+    let locative = if matches!(category, Category::Noun) {
+        let Ok(locative) = Confirm::new("Locative:")
+            .with_default(word.locative)
+            .prompt()
+        else {
+            return Err("abort!".to_string());
+        };
+        locative
+    } else {
+        false
     };
 
     let Ok(raw_weight) = Text::new("Weight:")
@@ -597,6 +610,7 @@ fn show_info(word: Word) -> Result<(), String> {
     }
 
     // Conjugation, declension + kind.
+    // TODO: to_human
     match word.conjugation_id {
         Some(id) => println!("Conjugation: {}", id),
         None => match word.declension_id {

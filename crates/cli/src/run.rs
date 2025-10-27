@@ -23,7 +23,7 @@ fn help(msg: Option<&str>) {
     println!("Options:");
     println!("   -c, --category <CATEGORY>\tOnly ask for words on the given <CATEGORY>.");
     println!("   -e, --exercises\t\tOnly practice with exercises.");
-    println!("   -f, --flag\t\tFilter words by a boolean flag. Multiple flags can be provided.");
+    println!("   -f, --flag\t\t\tFilter words by a boolean flag. Multiple flags can be provided.");
     println!("   -h, --help\t\t\tPrint this message.");
     println!("   -k, --kind <KIND>\t\tOnly ask for exercises for the given <KIND>.");
 }
