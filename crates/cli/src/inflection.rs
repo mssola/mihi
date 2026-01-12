@@ -47,10 +47,17 @@ fn print_noun_inflection(word: &Word) -> Result<(), String> {
 }
 
 fn get_adjective_table(word: &Word) -> Result<[DeclensionTable; 3], String> {
-    let kind_f = match word.declension_id {
-        Some(1 | 2) => &"a".to_string(),
-        _ => &word.kind,
+    // Unless the word is a special "unus nauta" variant, force 1/2 declension
+    // adjectives in the feminine to grab the "a" kind.
+    let kind_f = if word.kind.as_str() == "unusnauta" {
+        &word.kind
+    } else {
+        match word.declension_id {
+            Some(1 | 2) => &"a".to_string(),
+            _ => &word.kind,
+        }
     };
+
     let kind_n = if word.kind == "us" {
         &"um".to_owned()
     } else {
@@ -277,8 +284,53 @@ mod tests {
             "nova, novae | nova, novae | novam, novās | novae, novārum | novae, novīs | novā, novīs",
             "novum, nova | novum, nova | novum, nova | novī, novōrum | novō, novīs | novō, novīs",
         );
-        // TODO: pulcher
-        // TODO: unus nauta
-        // TODO: third
+        assert_adjective_table(
+            "pulcher, pulchra, pulchrum",
+            "pulcher, pulchrī | pulcher, pulchrī | pulchrum, pulchrōs | pulchrī, pulchrōrum | pulchrō, pulchrīs | pulchrō, pulchrīs",
+            "pulchra, pulchrae | pulchra, pulchrae | pulchram, pulchrās | pulchrae, pulchrārum | pulchrae, pulchrīs | pulchrā, pulchrīs",
+            "pulcher, pulchra | pulcher, pulchra | pulcher, pulchra | pulchrī, pulchrōrum | pulchrō, pulchrīs | pulchrō, pulchrīs",
+        );
+        assert_adjective_table(
+            "ūnus, ūna, ūnum",
+            "ūnus, ūnī | ūne, ūnī | ūnum, ūnōs | ūnīus, ūnōrum | ūnī, ūnīs | ūnō, ūnīs",
+            "ūna, ūnae | ūna, ūnae | ūnam, ūnās | ūnīus, ūnārum | ūnī, ūnīs | ūnā, ūnīs",
+            "ūnum, ūna | ūnum, ūna | ūnum, ūna | ūnīus, ūnōrum | ūnī, ūnīs | ūnō, ūnīs",
+        );
+        assert_adjective_table(
+            "ferōx, ferōx",
+            "ferōx, ferōcēs | ferōx, ferōcēs | ferōcem, ferōcēs | ferōcis, ferōcium | ferōcī, ferōcibus | ferōcī, ferōcibus",
+            "ferōx, ferōcēs | ferōx, ferōcēs | ferōcem, ferōcēs | ferōcis, ferōcium | ferōcī, ferōcibus | ferōcī, ferōcibus",
+            "ferōx, ferōcia | ferōx, ferōcia | ferōx, ferōcia | ferōcis, ferōcium | ferōcī, ferōcibus | ferōcī, ferōcibus",
+        );
+        assert_adjective_table(
+            "gravis, grave",
+            "gravis, gravēs | gravis, gravēs | gravem/gravīs, gravēs | gravis, gravium | gravī, gravibus | gravī, gravibus",
+            "gravis, gravēs | gravis, gravēs | gravem/gravīs, gravēs | gravis, gravium | gravī, gravibus | gravī, gravibus",
+            "grave, gravia | grave, gravia | grave, gravia | gravis, gravium | gravī, gravibus | gravī, gravibus",
+        );
+        assert_adjective_table(
+            "celer, celeris, celere",
+            "celer, celerēs | celer, celerēs | celerem, celerēs | celeris, celerium | celerī, celeribus | celerī, celeribus",
+            "celeris, celerēs | celeris, celerēs | celerem, celerēs | celeris, celerium | celerī, celeribus | celerī, celeribus",
+            "celere, celeria | celere, celeria | celere, celeria | celeris, celerium | celerī, celeribus | celerī, celeribus"
+        );
+        assert_adjective_table(
+            "duo, duae, duo",
+            "duo | duo | duo/duōs | duōrum | duōbus | duōbus",
+            "duae | duae | duās | duārum | duābus | duābus",
+            "duo | duo | duo | duōrum | duōbus | duōbus",
+        );
+        assert_adjective_table(
+            "trēs, trēs, tria",
+            "trēs | trēs | trēs/trīs | trium | tribus | tribus",
+            "trēs | trēs | trēs/trīs | trium | tribus | tribus",
+            "tria | tria | tria | trium | tribus | tribus",
+        );
+        assert_adjective_table(
+            "mīlle, mīlle",
+            "mīlle, mīlia | mīlle, mīlia | mīlle, mīlia | mīlle, mīlium | mīlle, mīlibus | mīlle, mīlibus",
+            "mīlle, mīlia | mīlle, mīlia | mīlle, mīlia | mīlle, mīlium | mīlle, mīlibus | mīlle, mīlibus",
+            "mīlle, mīlia | mīlle, mīlia | mīlle, mīlia | mīlle, mīlium | mīlle, mīlibus | mīlle, mīlibus"
+        );
     }
 }

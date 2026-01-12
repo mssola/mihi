@@ -999,11 +999,11 @@ fn contract_root(word: &Word, case: usize, number: usize, gender: usize) -> bool
         return true;
     }
 
-    // Nominative/vocative singular are never contracted. The accusative is
-    // only not contracted on neuter words.
+    // Nominative/vocative singular are only contracted for feminine nouns. The
+    // accusative is only not contracted on neuter words.
     match case {
-        0 | 1 => false,
-        2 => gender != 3,
+        0 | 1 => gender == Gender::Feminine as usize,
+        2 => gender != Gender::Neuter as usize,
         _ => true,
     }
 }
@@ -1095,7 +1095,8 @@ pub fn group_declension_inflections(
             "SELECT id, number, gender, \"case\", value, declension_id, \
                     kind, tense, mood, voice, person, conjugation_id \
              FROM forms \
-             WHERE kind = ?1 AND gender = ?2",
+             WHERE kind = ?1 AND gender = ?2
+             ORDER BY id",
         )
         .unwrap();
     let mut it = stmt.query([kind, &gender.to_string()]).unwrap();
