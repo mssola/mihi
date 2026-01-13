@@ -1,5 +1,13 @@
 use rusqlite::{Connection, Result};
 
+// TODO: not just the definition, but also the bootstrapping (into Git as there is nothing sensitive?).
+//  - conjugations
+//  - declensions
+//  - forms
+//  - languages
+//  - language_cases
+//  - word_relations
+
 /// Use the given `connection` in order to initialize the database.
 pub fn init(connection: Connection) -> Result<usize> {
     connection.execute(
@@ -18,8 +26,8 @@ CREATE TABLE IF NOT EXISTS "words" (
        "created_at" datetime(6) NOT NULL,
        "updated_at" datetime(6) NOT NULL,
        "suffix" varchar,
-       "language_id" integer,
-       "succeeded" integer,
+       "language_id" integer NOT NULL,
+       "succeeded" integer DEFAULT 0 NOT NULL,
        "steps" integer DEFAULT 0 NOT NULL,
        "translation" jsonb DEFAULT '{}',
        "pending" boolean DEFAULT 0,

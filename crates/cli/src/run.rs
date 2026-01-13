@@ -6,6 +6,8 @@ use std::io::Write;
 use std::process::Command;
 use tempfile::NamedTempFile;
 
+use crate::locale::{current_locale, Locale};
+
 // Maximum number of times a word has to be run in order to increase the number
 // of successful runs.
 const MAX_STEPS: usize = 5;
@@ -21,37 +23,9 @@ fn help(msg: Option<&str>) {
     println!("Options:");
     println!("   -c, --category <CATEGORY>\tOnly ask for words on the given <CATEGORY>.");
     println!("   -e, --exercises\t\tOnly practice with exercises.");
-    println!("   -f, --flag\t\tFilter words by a boolean flag. Multiple flags can be provided.");
+    println!("   -f, --flag\t\t\tFilter words by a boolean flag. Multiple flags can be provided.");
     println!("   -h, --help\t\t\tPrint this message.");
     println!("   -k, --kind <KIND>\t\tOnly ask for exercises for the given <KIND>.");
-}
-
-// Locale represents the locales accepted for delivering answers on this
-// tool. That is, it's not about i18n on the strings for this application. but
-// rather the different translations accepted in places like
-// `Word.translations`.
-enum Locale {
-    English,
-    Catalan,
-}
-
-impl Locale {
-    // Returns the string representation for the locale's code.
-    fn to_code(&self) -> &str {
-        match self {
-            Self::English => "en",
-            Self::Catalan => "ca",
-        }
-    }
-}
-
-impl std::fmt::Display for Locale {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::English => write!(f, "english"),
-            Self::Catalan => write!(f, "català"),
-        }
-    }
 }
 
 // Run the quiz for all the given `words` while expecting answers to be
@@ -323,12 +297,7 @@ pub fn run(args: Vec<String>) {
         }
     }
 
-    let raw_locale = std::env::var("LC_ALL").unwrap_or("en".to_string());
-    let locale = if raw_locale.starts_with("ca") {
-        Locale::Catalan
-    } else {
-        Locale::English
-    };
+    let locale = current_locale();
 
     let words = match category {
         Some(cat) => select_relevant_words(cat, &flags, 15),
