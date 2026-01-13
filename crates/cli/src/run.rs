@@ -13,8 +13,8 @@ use crate::locale::{current_locale, Locale};
 const MAX_STEPS: usize = 5;
 
 fn help(msg: Option<&str>) {
-    if msg.is_some() {
-        println!("{}.\n", msg.unwrap());
+    if let Some(msg) = msg {
+        println!("{}.\n", msg);
     }
 
     println!("mihi run: Run exercises. Default command if none was given.\n");

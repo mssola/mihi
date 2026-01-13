@@ -261,13 +261,7 @@ impl Word {
     /// Returns whether the given flag is set to true on this word.
     pub fn is_flag_set(&self, flag: &str) -> bool {
         match self.flags.get(flag) {
-            Some(value) => {
-                if let Some(b) = value.as_bool() {
-                    b
-                } else {
-                    false
-                }
-            }
+            Some(value) => value.as_bool().unwrap_or_default(),
             None => false,
         }
     }
@@ -378,7 +372,7 @@ pub fn create_word(word: Word) -> Result<(), String> {
         Category::Verb => match word.conjugation_id {
             Some(1..6) => {
                 if word.kind.as_str() != "verb" {
-                    return Err(format!("bad kind for verb"));
+                    return Err("bad kind for verb".to_string());
                 }
             }
             Some(val) => return Err(format!("the conjugation ID '{val}' is not valid")),
@@ -1043,29 +1037,23 @@ fn inflect_from(word: &Word, case: usize, number: usize, gender: usize, term: &s
     if !word.regular {
         inflections.push(term.to_owned());
     } else if contract_root(word, case, number, gender) {
-        inflections.push(
-            word.particle[0..word.particle.len() - 2].to_string()
-                + &"r".to_owned()
-                + &term.to_owned(),
-        );
+        inflections.push(word.particle[0..word.particle.len() - 2].to_string() + "r" + term);
     } else if should_use_first_root(word, case, number, gender) {
         let parts: Vec<&str> = word.enunciated.split(',').collect();
-        inflections.push(parts.first().unwrap().to_string() + &term.to_owned());
+        inflections.push(parts.first().unwrap().to_string() + term);
     } else if word.kind == "ius" && number == 0 {
         // Words of this kind are a bit troublesome on the singular, let's
         // handle them now.
         if case == 1 && word.is_flag_set("contracted_vocative") {
-            inflections
-                .push(word.particle[0..word.particle.len() - 1].to_string() + &term.to_owned());
+            inflections.push(word.particle[0..word.particle.len() - 1].to_string() + term);
         } else {
             if case == 3 {
-                inflections
-                    .push(word.particle[0..word.particle.len() - 1].to_string() + &term.to_owned());
+                inflections.push(word.particle[0..word.particle.len() - 1].to_string() + term);
             }
-            inflections.push(word.particle.to_string() + &term.to_owned());
+            inflections.push(word.particle.to_string() + term);
         }
     } else {
-        inflections.push(word.particle.clone() + &term.to_owned());
+        inflections.push(word.particle.clone() + term);
     }
 
     inflections
@@ -1106,9 +1094,9 @@ pub fn group_declension_inflections(
     while let Some(row) = it.next().unwrap() {
         // Fetch the number and account for defectives on number.
         let number: usize = row.get(1).unwrap();
-        if number == 0 && word.is_flag_set("onlyplural") {
-            continue;
-        } else if number == 1 && word.is_flag_set("onlysingular") {
+        if (number == 0 && word.is_flag_set("onlyplural"))
+            || (number == 1 && word.is_flag_set("onlysingular"))
+        {
             continue;
         }
 

@@ -4,8 +4,8 @@ use std::vec::IntoIter;
 
 // Show the help message.
 fn help(msg: Option<&str>) {
-    if msg.is_some() {
-        println!("{}.\n", msg.unwrap());
+    if let Some(msg) = msg {
+        println!("{}.\n", msg);
     }
 
     println!("mihi exercises: Manage exercises.\n");

@@ -57,8 +57,8 @@ static FLAGS_TEXT: &str = r#"# Write a JSON blob with the following allowed keys
 
 // Show the help message.
 fn help(msg: Option<&str>) {
-    if msg.is_some() {
-        println!("{}.\n", msg.unwrap());
+    if let Some(msg) = msg {
+        println!("{}.\n", msg);
     }
 
     println!("mihi words: Manage words.\n");
@@ -613,8 +613,8 @@ fn show_info(word: Word) -> Result<(), String> {
     // TODO: to_human
     match word.conjugation_id {
         Some(id) => println!("Conjugation: {}", id),
-        None => match word.declension_id {
-            Some(did) => {
+        None => {
+            if let Some(did) = word.declension_id {
                 if did > 5 {
                     println!("Declension: {}", humanize_kind(&word.kind));
                 } else {
@@ -625,8 +625,7 @@ fn show_info(word: Word) -> Result<(), String> {
                     );
                 }
             }
-            None => {}
-        },
+        }
     };
 
     // Show translation if available.
