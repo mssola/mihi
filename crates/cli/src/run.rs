@@ -206,6 +206,7 @@ pub fn run(args: Vec<String>) {
     let mut category = None;
     let mut kind: Option<ExerciseKind> = None;
     let mut exercises_only = false;
+    let mut endless = false;
     let mut flags: Vec<String> = vec![];
 
     while let Some(first) = it.next() {
@@ -243,6 +244,9 @@ pub fn run(args: Vec<String>) {
             }
             "-e" | "--exercises" => {
                 exercises_only = true;
+            }
+            "--endless" => {
+                endless = true;
             }
             "-f" | "--flag" => match it.next() {
                 Some(flag) => {
@@ -303,32 +307,37 @@ pub fn run(args: Vec<String>) {
 
     let locale = current_locale();
 
-    let words = match category {
-        Some(cat) => select_relevant_words(cat, &flags, 15),
-        None => select_general_words(&flags),
-    };
+    loop {
+        let words = match category {
+            Some(cat) => select_relevant_words(cat, &flags, 15),
+            None => select_general_words(&flags),
+        };
 
-    let exercises = match mihi::select_relevant_exercises(kind, if exercises_only { 5 } else { 1 })
-    {
-        Ok(exercises) => exercises,
-        Err(e) => {
-            println!("error: practice: {e}");
-            std::process::exit(1);
-        }
-    };
+        let exercises =
+            match mihi::select_relevant_exercises(kind, if exercises_only { 5 } else { 1 }) {
+                Ok(exercises) => exercises,
+                Err(e) => {
+                    println!("error: practice: {e}");
+                    std::process::exit(1);
+                }
+            };
 
-    match words {
-        Ok(list) => {
-            let mut code = 0;
-            if !exercises_only {
-                code += run_words(list, &locale);
+        let mut code = 0;
+        match words {
+            Ok(list) => {
+                if !exercises_only {
+                    code += run_words(list, &locale);
+                }
+                code += run_exercises(exercises);
             }
-            code += run_exercises(exercises);
+            Err(e) => {
+                println!("error: practice: {e}");
+                code = 1;
+            }
+        };
+
+        if !endless {
             std::process::exit(code);
         }
-        Err(e) => {
-            println!("error: practice: {e}");
-            std::process::exit(1);
-        }
-    };
+    }
 }
