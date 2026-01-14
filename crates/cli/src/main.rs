@@ -18,6 +18,7 @@ fn help() {
     println!("   -v, --version\tPrint the version of this program.\n");
 
     println!("Commands:");
+    println!("   exercises\t\tManage the exercises for this application.");
     println!("   init\t\t\tInitialize the configuration for this application.");
     println!("   nuke\t\t\tRemove all files from this application and its database.");
     println!("   practice\t\tPractice vocabulary/exercises. Default command if none was given.");

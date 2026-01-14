@@ -172,6 +172,20 @@ fn edit(mut args: IntoIter<String>) -> i32 {
     }
 }
 
+fn ls(mut args: IntoIter<String>) -> i32 {
+    if args.len() > 1 {
+        help(Some("error: exercises: too many filters"));
+        return 1;
+    }
+
+    let exercises = mihi::select_by_title(args.next()).unwrap_or(vec![]);
+    for exe in exercises {
+        println!("- '{}'", exe);
+    }
+
+    0
+}
+
 fn rm(mut args: IntoIter<String>) -> i32 {
     if args.len() > 1 {
         help(Some("error: exercises: too many filters"));
@@ -231,6 +245,9 @@ pub fn run(args: Vec<String>) {
             }
             "edit" => {
                 std::process::exit(edit(it));
+            }
+            "ls" => {
+                std::process::exit(ls(it));
             }
             "rm" => {
                 std::process::exit(rm(it));
