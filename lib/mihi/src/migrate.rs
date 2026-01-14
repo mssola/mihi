@@ -4,8 +4,6 @@ use rusqlite::{Connection, Result};
 //  - conjugations
 //  - declensions
 //  - forms
-//  - languages
-//  - language_cases
 //  - word_relations
 
 /// Use the given `connection` in order to initialize the database.
