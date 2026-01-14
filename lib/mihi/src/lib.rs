@@ -2,11 +2,92 @@ use serde_json::Value;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
+use std::io::{self, BufRead, BufReader, Error};
 use std::path::{Path, PathBuf};
 
 use rusqlite::{params, Connection};
 
 mod migrate;
+
+/// Returns the configuration path for the application, and it even creates it
+/// if it doesn't exist already.
+pub fn get_config_path() -> Result<PathBuf, String> {
+    let dir = match &std::env::var("XDG_CONFIG_HOME") {
+        Ok(path) => PathBuf::from(path),
+        Err(_) => match &std::env::var("HOME") {
+            Ok(path) => Path::new(path).join(".config"),
+            Err(_) => {
+                return Err(String::from(
+                    "cannot find a suitable path for the configuration",
+                ))
+            }
+        },
+    }
+    .join("mihi");
+
+    match fs::create_dir_all(&dir) {
+        Ok(_) => {}
+        Err(e) => return Err(e.to_string()),
+    };
+
+    Ok(dir)
+}
+
+#[derive(Default, Debug)]
+pub enum CaseOrder {
+    #[default]
+    European,
+    English,
+}
+
+impl CaseOrder {
+    /// Returns the current case order as a bunch of integers which represent
+    /// each case on a given order.
+    pub fn to_usizes(&self) -> [usize; 7] {
+        match self {
+            CaseOrder::European => [0, 1, 2, 3, 4, 5, 6],
+            CaseOrder::English => [0, 3, 4, 2, 5, 1, 6],
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Configuration {
+    pub language: Language,
+    pub case_order: CaseOrder,
+}
+
+/// Reads the global configuration and returns a proper object for it. It will
+/// assume some defaults if there is something that goes wrong when reading it.
+pub fn configuration() -> Configuration {
+    let order = read_line_from(1).unwrap_or(String::from("european"));
+    let case_order = match order.as_str() {
+        "english" => CaseOrder::English,
+        _ => CaseOrder::European,
+    };
+
+    Configuration {
+        language: Language::Latin,
+        case_order,
+    }
+}
+
+// Read a specific line from the configuration and return a String.
+fn read_line_from(line: usize) -> Result<String, Error> {
+    let path = get_config_path().map_err(std::io::Error::other)?;
+    let cfg = path.join("languages.txt");
+
+    let file = File::open(cfg)?;
+    let reader = BufReader::new(file);
+
+    let line = reader
+        .lines()
+        .nth(line)
+        .transpose()?
+        .ok_or_else(|| io::Error::other("line not found"))?;
+
+    Ok(line)
+}
 
 #[derive(Clone, Copy, Debug, Default)]
 pub enum Category {
@@ -136,30 +217,6 @@ impl std::fmt::Display for Language {
             Self::Latin => write!(f, "latin"),
         }
     }
-}
-
-/// Returns the configuration path for the application, and it even creates it
-/// if it doesn't exist already.
-pub fn get_config_path() -> Result<PathBuf, String> {
-    let dir = match &std::env::var("XDG_CONFIG_HOME") {
-        Ok(path) => PathBuf::from(path),
-        Err(_) => match &std::env::var("HOME") {
-            Ok(path) => Path::new(path).join(".config"),
-            Err(_) => {
-                return Err(String::from(
-                    "cannot find a suitable path for the configuration",
-                ))
-            }
-        },
-    }
-    .join("mihi");
-
-    match fs::create_dir_all(&dir) {
-        Ok(_) => {}
-        Err(e) => return Err(e.to_string()),
-    };
-
-    Ok(dir)
 }
 
 /// Add the given language into the configuration of this application.

@@ -1,4 +1,7 @@
-use mihi::{group_declension_inflections, Category, DeclensionInfo, DeclensionTable, Gender, Word};
+use mihi::{
+    configuration, group_declension_inflections, Category, DeclensionInfo, DeclensionTable, Gender,
+    Word,
+};
 
 fn get_inflected_from(word: &Word, row: &[DeclensionInfo; 2]) -> String {
     if word.is_flag_set("onlysingular") {
@@ -27,20 +30,27 @@ fn print_noun_inflection(word: &Word) -> Result<(), String> {
 
     println!("\n== Inflection ==\n");
 
-    println!(
-        "Nominative:\t{}",
-        get_inflected_from(word, &table.nominative)
-    );
-    println!("Vocative:\t{}", get_inflected_from(word, &table.vocative));
-    println!(
-        "Accusative:\t{}",
-        get_inflected_from(word, &table.accusative)
-    );
-    println!("Genitive:\t{}", get_inflected_from(word, &table.genitive));
-    println!("Dative:\t\t{}", get_inflected_from(word, &table.dative));
-    println!("Ablative:\t{}", get_inflected_from(word, &table.ablative));
-    if word.locative {
-        println!("Locative:\t{}", get_inflected_from(word, &table.locative));
+    for idx in configuration().case_order.to_usizes() {
+        match idx {
+            0 => println!(
+                "Nominative:\t{}",
+                get_inflected_from(word, &table.nominative)
+            ),
+            1 => println!("Vocative:\t{}", get_inflected_from(word, &table.vocative)),
+            2 => println!(
+                "Accusative:\t{}",
+                get_inflected_from(word, &table.accusative)
+            ),
+            3 => println!("Genitive:\t{}", get_inflected_from(word, &table.genitive)),
+            4 => println!("Dative:\t\t{}", get_inflected_from(word, &table.dative)),
+            5 => println!("Ablative:\t{}", get_inflected_from(word, &table.ablative)),
+            6 => {
+                if word.locative {
+                    println!("Locative:\t{}", get_inflected_from(word, &table.locative));
+                }
+            }
+            _ => {}
+        }
     }
 
     Ok(())
@@ -76,49 +86,56 @@ fn print_adjective_inflection(word: &Word) -> Result<(), String> {
 
     println!("\n== Inflection ==\n");
 
-    println!(
-        "Nominative:\t{} | {} | {}",
-        get_inflected_from(word, &tables[0].nominative),
-        get_inflected_from(word, &tables[1].nominative),
-        get_inflected_from(word, &tables[2].nominative)
-    );
-    println!(
-        "Vocative:\t{} | {} | {}",
-        get_inflected_from(word, &tables[0].vocative),
-        get_inflected_from(word, &tables[1].vocative),
-        get_inflected_from(word, &tables[2].vocative)
-    );
-    println!(
-        "Accusative:\t{} | {} | {}",
-        get_inflected_from(word, &tables[0].accusative),
-        get_inflected_from(word, &tables[1].accusative),
-        get_inflected_from(word, &tables[2].accusative)
-    );
-    println!(
-        "Genitive:\t{} | {} | {}",
-        get_inflected_from(word, &tables[0].genitive),
-        get_inflected_from(word, &tables[1].genitive),
-        get_inflected_from(word, &tables[2].genitive)
-    );
-    println!(
-        "Dative:\t\t{} | {} | {}",
-        get_inflected_from(word, &tables[0].dative),
-        get_inflected_from(word, &tables[1].dative),
-        get_inflected_from(word, &tables[2].dative)
-    );
-    println!(
-        "Ablative:\t{} | {} | {}",
-        get_inflected_from(word, &tables[0].ablative),
-        get_inflected_from(word, &tables[1].ablative),
-        get_inflected_from(word, &tables[2].ablative)
-    );
-    if word.locative {
-        println!(
-            "Locative:\t{} | {} | {}",
-            get_inflected_from(word, &tables[0].locative),
-            get_inflected_from(word, &tables[1].locative),
-            get_inflected_from(word, &tables[2].locative)
-        );
+    for idx in configuration().case_order.to_usizes() {
+        match idx {
+            0 => println!(
+                "Nominative:\t{} | {} | {}",
+                get_inflected_from(word, &tables[0].nominative),
+                get_inflected_from(word, &tables[1].nominative),
+                get_inflected_from(word, &tables[2].nominative)
+            ),
+            1 => println!(
+                "Vocative:\t{} | {} | {}",
+                get_inflected_from(word, &tables[0].vocative),
+                get_inflected_from(word, &tables[1].vocative),
+                get_inflected_from(word, &tables[2].vocative)
+            ),
+            2 => println!(
+                "Accusative:\t{} | {} | {}",
+                get_inflected_from(word, &tables[0].accusative),
+                get_inflected_from(word, &tables[1].accusative),
+                get_inflected_from(word, &tables[2].accusative)
+            ),
+            3 => println!(
+                "Genitive:\t{} | {} | {}",
+                get_inflected_from(word, &tables[0].genitive),
+                get_inflected_from(word, &tables[1].genitive),
+                get_inflected_from(word, &tables[2].genitive)
+            ),
+            4 => println!(
+                "Dative:\t\t{} | {} | {}",
+                get_inflected_from(word, &tables[0].dative),
+                get_inflected_from(word, &tables[1].dative),
+                get_inflected_from(word, &tables[2].dative)
+            ),
+            5 => println!(
+                "Ablative:\t{} | {} | {}",
+                get_inflected_from(word, &tables[0].ablative),
+                get_inflected_from(word, &tables[1].ablative),
+                get_inflected_from(word, &tables[2].ablative)
+            ),
+            6 => {
+                if word.locative {
+                    println!(
+                        "Locative:\t{} | {} | {}",
+                        get_inflected_from(word, &tables[0].locative),
+                        get_inflected_from(word, &tables[1].locative),
+                        get_inflected_from(word, &tables[2].locative)
+                    );
+                }
+            }
+            _ => {}
+        }
     }
 
     Ok(())
