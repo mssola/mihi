@@ -188,6 +188,10 @@ fn run_exercises(exercises: Vec<Exercise>) -> i32 {
             return 1;
         };
         let solution = remove_exercise_enunciate(solution);
+        println!(
+            "Enunciate for '{}':\n\n{}\n\nGiven:\n",
+            exercise.title, exercise.enunciate
+        );
 
         if !accepted_diff(solution, exercise.solution) {
             errors += 1;
