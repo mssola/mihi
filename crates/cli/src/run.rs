@@ -30,9 +30,7 @@ fn help(msg: Option<&str>) {
 
 // Run the quiz for all the given `words` while expecting answers to be
 // delivered in the given `locale`.
-fn run_words(words: Vec<Word>, locale: &Locale) -> i32 {
-    let mut errors = 0;
-
+fn run_words(words: Vec<Word>, locale: &Locale) -> bool {
     for word in words {
         // If the translation cannot be found, skip this word.
         let Some(translation) = word.translation.get(locale.to_code()) else {
@@ -42,7 +40,7 @@ fn run_words(words: Vec<Word>, locale: &Locale) -> i32 {
         println!("Word: {}", word.enunciated);
 
         let Ok(raw) = Text::new(format!("Translation ({locale}):").as_str()).prompt() else {
-            return 1;
+            return false;
         };
         let answer = raw.trim();
 
@@ -61,11 +59,10 @@ fn run_words(words: Vec<Word>, locale: &Locale) -> i32 {
                 let _ = update_success(&word, word.succeeded - 1, 0);
             }
             println!("\x1b[91m❌{tr}\x1b[0m");
-            errors += 1;
         }
     }
 
-    errors
+    true
 }
 
 // Returns a vector of words which contain a randomized set of words from
@@ -164,13 +161,11 @@ fn accepted_diff(given: String, expected: String) -> bool {
 }
 
 // Run the quiz for all the given `exercises`.
-fn run_exercises(exercises: Vec<Exercise>) -> i32 {
+fn run_exercises(exercises: Vec<Exercise>) -> bool {
     if exercises.is_empty() {
         println!("practice: no exercises!");
-        return 0;
+        return true;
     }
-
-    let mut errors = 0;
 
     for exercise in exercises {
         let Ok(solution) = Editor::new(
@@ -185,20 +180,24 @@ fn run_exercises(exercises: Vec<Exercise>) -> i32 {
         )
         .with_file_extension(".md")
         .prompt() else {
-            return 1;
+            return false;
         };
-        let solution = remove_exercise_enunciate(solution);
+
+        let mut solution = remove_exercise_enunciate(solution);
+        if solution.is_empty() {
+            solution = String::from("<no solution given>");
+        }
         println!(
             "Enunciate for '{}':\n\n{}\n\nGiven:\n",
             exercise.title, exercise.enunciate
         );
 
         if !accepted_diff(solution, exercise.solution) {
-            errors += 1;
+            // TODO: update_{success,failure}
         }
     }
 
-    errors
+    true
 }
 
 pub fn run(args: Vec<String>) {
@@ -322,17 +321,21 @@ pub fn run(args: Vec<String>) {
                 }
             };
 
-        let mut code = 0;
-        match words {
+        let code = match words {
             Ok(list) => {
-                if !exercises_only {
-                    code += run_words(list, &locale);
+                if !exercises_only
+                    && !run_words(list, &locale) {
+                        std::process::exit(1);
+                    }
+                if !run_exercises(exercises) {
+                    std::process::exit(1);
                 }
-                code += run_exercises(exercises);
+
+                0
             }
             Err(e) => {
                 println!("error: practice: {e}");
-                code = 1;
+                1
             }
         };
 
