@@ -1,4 +1,5 @@
 use inquire::{Confirm, Editor, Text};
+use mihi::touch_exercise;
 use mihi::{select_relevant_words, update_success, Category, Exercise, ExerciseKind, Word};
 use std::env;
 use std::fs;
@@ -124,7 +125,7 @@ fn diff_tool() -> Option<&'static str> {
 // and interactively ask the user if things are ok. Returns a boolean depending
 // on the user's answer to that final question, or false if something went
 // wrong.
-fn accepted_diff(given: String, expected: String) -> bool {
+fn accepted_diff(given: String, expected: &String) -> bool {
     // If a diff tool could be fetched, then write into temporary files and call
     // the diff tool against both temporary files; otherwise just print things
     // out into the stdout.
@@ -192,8 +193,11 @@ fn run_exercises(exercises: Vec<Exercise>) -> bool {
             exercise.title, exercise.enunciate
         );
 
-        if !accepted_diff(solution, exercise.solution) {
-            // TODO: update_{success,failure}
+        // If the exercise is seen as correct by the user, then "touch"
+        // (i.e. refresh the 'updated_at' date). This way, next time we select
+        // exercises to show the user, we can prevent this one showing up first.
+        if accepted_diff(solution, &exercise.solution) {
+            let _ = touch_exercise(exercise);
         }
     }
 

@@ -856,6 +856,25 @@ pub fn update_exercise(exercise: Exercise) -> Result<(), String> {
     }
 }
 
+/// Updates the 'updated_at' column for an exercise.
+pub fn touch_exercise(exercise: Exercise) -> Result<(), String> {
+    if exercise.id == 0 {
+        return Err("invalid exercise to update; seems it has not been created before".to_string());
+    }
+
+    let conn = get_connection()?;
+
+    match conn.execute(
+        "UPDATE exercises \
+         SET updated_at = datetime('now') \
+         WHERE id = ?1",
+        params![exercise.id],
+    ) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("could not update '{}': {}", exercise.title, e)),
+    }
+}
+
 /// Delete an exercise from the database.
 pub fn delete_exercise(title: &str) -> Result<(), String> {
     let conn = get_connection()?;
