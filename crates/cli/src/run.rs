@@ -50,7 +50,7 @@ fn run_words(words: Vec<Word>, locale: &Locale) -> i32 {
         let found = !answer.is_empty() && tr.split(',').any(|tr| tr.trim().contains(answer));
 
         if found {
-            if word.steps == MAX_STEPS - 1 {
+            if word.steps as usize == MAX_STEPS - 1 {
                 let _ = update_success(&word, word.succeeded + 1, 0);
             } else {
                 let _ = update_success(&word, word.succeeded, word.steps + 1);

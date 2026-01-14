@@ -40,10 +40,10 @@ impl std::fmt::Display for Category {
     }
 }
 
-impl TryFrom<usize> for Category {
+impl TryFrom<isize> for Category {
     type Error = &'static str;
 
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
+    fn try_from(value: isize) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Self::Unknown),
             1 => Ok(Self::Noun),
@@ -83,10 +83,10 @@ impl Gender {
     }
 }
 
-impl TryFrom<usize> for Gender {
+impl TryFrom<isize> for Gender {
     type Error = &'static str;
 
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
+    fn try_from(value: isize) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Self::Masculine),
             1 => Ok(Self::Feminine),
@@ -117,10 +117,10 @@ pub enum Language {
     Latin,
 }
 
-impl TryFrom<usize> for Language {
+impl TryFrom<isize> for Language {
     type Error = &'static str;
 
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
+    fn try_from(value: isize) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Self::Unknown),
             1 => Ok(Self::Latin),
@@ -206,8 +206,8 @@ pub struct Word {
     pub enunciated: String,
     pub particle: String,
     pub language: Language,
-    pub declension_id: Option<usize>,
-    pub conjugation_id: Option<usize>,
+    pub declension_id: Option<isize>,
+    pub conjugation_id: Option<isize>,
     pub kind: String,
     pub category: Category,
     pub regular: bool,
@@ -216,17 +216,17 @@ pub struct Word {
     pub suffix: Option<String>,
     pub translation: Value,
     pub flags: Value,
-    pub succeeded: usize,
-    pub steps: usize,
-    pub weight: usize,
+    pub succeeded: isize,
+    pub steps: isize,
+    pub weight: isize,
 }
 
 impl Word {
     pub fn from(
         particle: String,
         category: Category,
-        declension_id: Option<usize>,
-        conjugation_id: Option<usize>,
+        declension_id: Option<isize>,
+        conjugation_id: Option<isize>,
         gender: Gender,
         kind: String,
     ) -> Word {
@@ -251,7 +251,7 @@ impl Word {
         }
     }
 
-    pub fn inflection_id(&self) -> Option<usize> {
+    pub fn inflection_id(&self) -> Option<isize> {
         if matches!(self.category, Category::Verb) {
             return Some(self.conjugation_id.unwrap());
         }
@@ -341,7 +341,7 @@ pub fn create_word(word: Word) -> Result<(), String> {
     match word.category {
         Category::Noun => match word.declension_id {
             Some(id @ 1..7) => {
-                if !DECLENSIONS_WITH_KINDS[id - 1].contains(&word.kind.as_str()) {
+                if !DECLENSIONS_WITH_KINDS[id as usize - 1].contains(&word.kind.as_str()) {
                     return Err(format!("bad kind for declension '{id}'"));
                 }
             }
@@ -354,7 +354,7 @@ pub fn create_word(word: Word) -> Result<(), String> {
         },
         Category::Adjective => match word.declension_id {
             Some(id @ (1 | 3)) => {
-                if !ADJECTIVE_KINDS[id - 1].contains(&word.kind.as_str()) {
+                if !ADJECTIVE_KINDS[id as usize - 1].contains(&word.kind.as_str()) {
                     return Err(format!("bad kind for declension '{id}'"));
                 }
             }
@@ -410,14 +410,14 @@ pub fn create_word(word: Word) -> Result<(), String> {
         params![
             word.enunciated.trim(),
             word.particle.trim(),
-            word.language as usize,
+            word.language as isize,
             word.declension_id,
             word.conjugation_id,
             word.kind.trim(),
-            word.category as usize,
+            word.category as isize,
             word.regular,
             word.locative,
-            word.gender as usize,
+            word.gender as isize,
             word.suffix,
             serde_json::to_string(&word.flags).unwrap(),
             serde_json::to_string(&word.translation).unwrap(),
@@ -451,10 +451,10 @@ pub fn update_word(word: Word) -> Result<(), String> {
             word.declension_id,
             word.conjugation_id,
             word.kind,
-            word.category as usize,
+            word.category as isize,
             word.regular,
             word.locative,
-            word.gender as usize,
+            word.gender as isize,
             word.suffix,
             serde_json::to_string(&word.flags).unwrap(),
             serde_json::to_string(&word.translation).unwrap(),
@@ -514,14 +514,14 @@ pub fn find_by(enunciated: &str) -> Result<Word, String> {
                 id: row.get(0).unwrap(),
                 enunciated: row.get(1).unwrap(),
                 particle: row.get(2).unwrap(),
-                language: row.get::<usize, usize>(3).unwrap().try_into()?,
+                language: row.get::<usize, isize>(3).unwrap().try_into()?,
                 declension_id: row.get(4).unwrap(),
                 conjugation_id: row.get(5).unwrap(),
                 kind: row.get(6).unwrap(),
-                category: row.get::<usize, usize>(7).unwrap().try_into()?,
+                category: row.get::<usize, isize>(7).unwrap().try_into()?,
                 regular: row.get(8).unwrap(),
                 locative: row.get(9).unwrap(),
-                gender: row.get::<usize, usize>(10).unwrap().try_into()?,
+                gender: row.get::<usize, isize>(10).unwrap().try_into()?,
                 suffix: row.get(11).unwrap(),
                 translation: serde_json::from_str(&row.get::<usize, String>(12).unwrap()).unwrap(),
                 succeeded: row.get(13).unwrap(),
@@ -556,7 +556,7 @@ fn flags_clause(flags: &Vec<String>) -> String {
 pub fn select_relevant_words(
     category: Category,
     flags: &Vec<String>,
-    number: usize,
+    number: isize,
 ) -> Result<Vec<Word>, String> {
     let conn = get_connection()?;
     let mut stmt = conn
@@ -574,7 +574,7 @@ pub fn select_relevant_words(
             .as_str(),
         )
         .unwrap();
-    let mut it = stmt.query([category as usize, number]).unwrap();
+    let mut it = stmt.query([category as isize, number]).unwrap();
 
     let mut res = vec![];
     while let Some(row) = it.next().unwrap() {
@@ -582,14 +582,14 @@ pub fn select_relevant_words(
             id: row.get(0).unwrap(),
             enunciated: row.get(1).unwrap(),
             particle: row.get(2).unwrap(),
-            language: row.get::<usize, usize>(3).unwrap().try_into()?,
+            language: row.get::<usize, isize>(3).unwrap().try_into()?,
             declension_id: row.get(4).unwrap(),
             conjugation_id: row.get(5).unwrap(),
             kind: row.get(6).unwrap(),
-            category: row.get::<usize, usize>(7).unwrap().try_into()?,
+            category: row.get::<usize, isize>(7).unwrap().try_into()?,
             regular: row.get(8).unwrap(),
             locative: row.get(9).unwrap(),
-            gender: row.get::<usize, usize>(10).unwrap().try_into()?,
+            gender: row.get::<usize, isize>(10).unwrap().try_into()?,
             suffix: row.get(11).unwrap(),
             translation: serde_json::from_str(&row.get::<usize, String>(12).unwrap()).unwrap(),
             succeeded: row.get(13).unwrap(),
@@ -601,7 +601,7 @@ pub fn select_relevant_words(
     Ok(res)
 }
 
-pub fn update_success(word: &Word, success: usize, steps: usize) -> Result<(), String> {
+pub fn update_success(word: &Word, success: isize, steps: isize) -> Result<(), String> {
     let conn = get_connection()?;
 
     match conn.execute(
@@ -659,10 +659,10 @@ impl std::fmt::Display for ExerciseKind {
     }
 }
 
-impl TryFrom<usize> for ExerciseKind {
+impl TryFrom<isize> for ExerciseKind {
     type Error = &'static str;
 
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
+    fn try_from(value: isize) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Self::Pensum),
             1 => Ok(Self::Translation),
@@ -709,7 +709,7 @@ pub fn create_exercise(exercise: Exercise) -> Result<(), String> {
             exercise.enunciate,
             exercise.solution,
             exercise.lessons,
-            exercise.kind as usize,
+            exercise.kind as isize,
         ],
     ) {
         Ok(_) => Ok(()),
@@ -765,7 +765,7 @@ pub fn find_exercise_by_title(title: &str) -> Result<Exercise, String> {
                 enunciate: row.get(2).unwrap(),
                 solution: row.get(3).unwrap(),
                 lessons: row.get(4).unwrap(),
-                kind: row.get::<usize, usize>(5).unwrap().try_into()?,
+                kind: row.get::<usize, isize>(5).unwrap().try_into()?,
             }),
             None => Err("no exercises were found with this title".to_string()),
         },
@@ -791,7 +791,7 @@ pub fn update_exercise(exercise: Exercise) -> Result<(), String> {
             exercise.enunciate,
             exercise.solution,
             exercise.lessons,
-            exercise.kind as usize,
+            exercise.kind as isize,
         ],
     ) {
         Ok(_) => Ok(()),
@@ -814,7 +814,7 @@ pub fn delete_exercise(title: &str) -> Result<(), String> {
 // by `kind`.
 pub fn select_relevant_exercises(
     kind: Option<ExerciseKind>,
-    limit: usize,
+    limit: isize,
 ) -> Result<Vec<Exercise>, String> {
     let conn = get_connection()?;
 
@@ -830,7 +830,7 @@ pub fn select_relevant_exercises(
                      LIMIT ?2",
                 )
                 .unwrap();
-            stmt.query([kind as usize, limit]).unwrap()
+            stmt.query([kind as isize, limit]).unwrap()
         }
         None => {
             stmt = conn
@@ -853,7 +853,7 @@ pub fn select_relevant_exercises(
             enunciate: row.get(2).unwrap(),
             solution: row.get(3).unwrap(),
             lessons: row.get(4).unwrap(),
-            kind: row.get::<usize, usize>(5).unwrap().try_into()?,
+            kind: row.get::<usize, isize>(5).unwrap().try_into()?,
         });
     }
     Ok(res)
@@ -1093,17 +1093,24 @@ pub fn group_declension_inflections(
 
     while let Some(row) = it.next().unwrap() {
         // Fetch the number and account for defectives on number.
-        let number: usize = row.get(1).unwrap();
+        let number_i: isize = row.get(1).unwrap();
+        let number: usize = usize::try_from(number_i).expect("not expecting a negative number");
         if (number == 0 && word.is_flag_set("onlyplural"))
             || (number == 1 && word.is_flag_set("onlysingular"))
         {
             continue;
         }
 
-        let case = row.get(3).unwrap();
+        let case_i: isize = row.get(3).unwrap();
         let term: String = row.get(4).unwrap();
 
-        table.add(word, case, number, gender, &term);
+        table.add(
+            word,
+            usize::try_from(case_i).expect("not expecting a negative number"),
+            number,
+            gender,
+            &term,
+        );
     }
 
     if let Some(sets) = word.flags.get("sets") {

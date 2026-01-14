@@ -221,7 +221,7 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
         Category::Determiner,
     ];
     let Ok(category) = Select::new("Category:", categories)
-        .with_starting_cursor(word.category as usize)
+        .with_starting_cursor((word.category as isize).try_into().unwrap())
         .prompt()
     else {
         return Err("abort!".to_string());
@@ -237,7 +237,7 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
     let gender = match category {
         Category::Noun => {
             match Select::new("Gender:", genders)
-                .with_starting_cursor(word.gender as usize)
+                .with_starting_cursor((word.gender as isize).try_into().unwrap())
                 .prompt()
             {
                 Ok(selection) => selection,
@@ -255,7 +255,7 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
             else {
                 return Err("abort!".to_string());
             };
-            let Ok(inflection_id) = inflection.parse::<usize>() else {
+            let Ok(inflection_id) = inflection.parse::<isize>() else {
                 return Err(format!("bad value for inflection ID '{inflection}'"));
             };
             Some(inflection_id)
@@ -305,7 +305,7 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
     else {
         return Err("abort!".to_string());
     };
-    let Ok(weight) = raw_weight.parse::<usize>() else {
+    let Ok(weight) = raw_weight.parse::<isize>() else {
         return Err(format!(
             "bad value for inflection ID '{}'",
             inflection_id.unwrap_or(0)
