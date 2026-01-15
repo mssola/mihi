@@ -1,8 +1,8 @@
 use inquire::{Confirm, Editor, Text};
-use mihi::{configuration, get_inflected_from};
+use mihi::{configuration, get_adjective_table, get_inflected_from};
 use mihi::{
-    get_noun_table, select_relevant_words, touch_exercise, update_success, Category, Exercise,
-    ExerciseKind, Word,
+    get_noun_table, select_relevant_words, touch_exercise, update_success, Category,
+    DeclensionTable, Exercise, ExerciseKind, Word,
 };
 use std::env;
 use std::fs;
@@ -103,6 +103,107 @@ fn same_answer(given: &String, expected: &String) -> bool {
     accepted_diff(given, expected)
 }
 
+fn ask_for_table(word: &Word, table: &DeclensionTable, id: Option<&str>) -> bool {
+    let added = match id {
+        Some(s) => format!(" ({}) ", s),
+        None => " ".to_string(),
+    };
+    let mut initial = format!("== {}{}==\n\n", word.enunciated, added);
+    let mut expected = format!("== {}{}==\n\n", word.enunciated, added);
+
+    for idx in configuration().case_order.to_usizes() {
+        match idx {
+            0 => {
+                initial.push_str("Nominative: \n");
+                expected.push_str(
+                    format!(
+                        "Nominative: {}\n",
+                        get_inflected_from(word, &table.nominative)
+                    )
+                    .as_str(),
+                );
+            }
+            1 => {
+                initial.push_str("Vocative: \n");
+                expected.push_str(
+                    format!("Vocative: {}\n", get_inflected_from(word, &table.vocative)).as_str(),
+                );
+            }
+            2 => {
+                initial.push_str("Accusative: \n");
+                expected.push_str(
+                    format!(
+                        "Accusative: {}\n",
+                        get_inflected_from(word, &table.accusative)
+                    )
+                    .as_str(),
+                );
+            }
+            3 => {
+                initial.push_str("Genitive: \n");
+                expected.push_str(
+                    format!("Genitive: {}\n", get_inflected_from(word, &table.genitive)).as_str(),
+                );
+            }
+            4 => {
+                initial.push_str("Dative: \n");
+                expected.push_str(
+                    format!("Dative: {}\n", get_inflected_from(word, &table.dative)).as_str(),
+                );
+            }
+            5 => {
+                initial.push_str("Ablative: \n");
+                expected.push_str(
+                    format!("Ablative: {}\n", get_inflected_from(word, &table.ablative)).as_str(),
+                );
+            }
+            6 => {
+                if word.locative {
+                    initial.push_str("Locative: \n");
+                    expected.push_str(
+                        format!("Locative: {}\n", get_inflected_from(word, &table.locative))
+                            .as_str(),
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Inflection time!
+    let Ok(solution) = Editor::new("Open the editor to inflect:")
+        .with_predefined_text(initial.as_str())
+        .with_file_extension(".md")
+        .prompt()
+    else {
+        return false;
+    };
+
+    same_answer(&solution, &expected)
+}
+
+fn good_noun_inflection(word: &Word) -> bool {
+    if let Ok(table) = get_noun_table(word) {
+        return ask_for_table(word, &table, None);
+    }
+    true
+}
+
+fn good_adjective_inflection(word: &Word) -> bool {
+    if let Ok(tables) = get_adjective_table(word) {
+        ask_for_table(word, &tables[0], Some("in the masculine"));
+    }
+    true
+}
+
+fn good_inflection(word: &Word) -> bool {
+    match word.category {
+        Category::Noun => good_noun_inflection(word),
+        Category::Adjective => good_adjective_inflection(word),
+        _ => todo!(),
+    }
+}
+
 fn run_inflect_words(words: &Vec<Word>, locale: &Locale) -> bool {
     for word in words {
         // If the translation cannot be found, skip this word.
@@ -139,87 +240,9 @@ fn run_inflect_words(words: &Vec<Word>, locale: &Locale) -> bool {
             println!("\x1b[91m❌\x1b[0m\n");
         }
 
-        let mut initial = format!("== {} ==\n\n", word.enunciated);
-        let mut expected = format!("== {} ==\n\n", word.enunciated);
-
-        if let Ok(table) = get_noun_table(word) {
-            for idx in configuration().case_order.to_usizes() {
-                match idx {
-                    0 => {
-                        initial.push_str("Nominative: \n");
-                        expected.push_str(
-                            format!(
-                                "Nominative: {}\n",
-                                get_inflected_from(word, &table.nominative)
-                            )
-                            .as_str(),
-                        );
-                    }
-                    1 => {
-                        initial.push_str("Vocative: \n");
-                        expected.push_str(
-                            format!("Vocative: {}\n", get_inflected_from(word, &table.vocative))
-                                .as_str(),
-                        );
-                    }
-                    2 => {
-                        initial.push_str("Accusative: \n");
-                        expected.push_str(
-                            format!(
-                                "Accusative: {}\n",
-                                get_inflected_from(word, &table.accusative)
-                            )
-                            .as_str(),
-                        );
-                    }
-                    3 => {
-                        initial.push_str("Genitive: \n");
-                        expected.push_str(
-                            format!("Genitive: {}\n", get_inflected_from(word, &table.genitive))
-                                .as_str(),
-                        );
-                    }
-                    4 => {
-                        initial.push_str("Dative: \n");
-                        expected.push_str(
-                            format!("Dative: {}\n", get_inflected_from(word, &table.dative))
-                                .as_str(),
-                        );
-                    }
-                    5 => {
-                        initial.push_str("Ablative: \n");
-                        expected.push_str(
-                            format!("Ablative: {}\n", get_inflected_from(word, &table.ablative))
-                                .as_str(),
-                        );
-                    }
-                    6 => {
-                        if word.locative {
-                            initial.push_str("Locative: \n");
-                            expected.push_str(
-                                format!(
-                                    "Locative: {}\n",
-                                    get_inflected_from(word, &table.locative)
-                                )
-                                .as_str(),
-                            );
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        // Inflection time!
-        let Ok(solution) = Editor::new("Open the editor to inflect:")
-            .with_predefined_text(initial.as_str())
-            .with_file_extension(".md")
-            .prompt()
-        else {
-            return false;
-        };
-
-        if same_answer(&solution, &expected) {
+        // Now ask for inflecting the given word in various ways depending on
+        // the word category.
+        if good_inflection(word) {
             if word.steps as usize == MAX_STEPS - 1 {
                 let _ = update_success(word, word.succeeded + 1, 0);
             } else {
