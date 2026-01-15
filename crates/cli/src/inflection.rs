@@ -1,29 +1,6 @@
 use mihi::{
-    configuration, group_declension_inflections, Category, DeclensionInfo, DeclensionTable, Gender,
-    Word,
+    configuration, get_adjective_table, get_inflected_from, get_noun_table, Category, Word,
 };
-
-fn get_inflected_from(word: &Word, row: &[DeclensionInfo; 2]) -> String {
-    if word.is_flag_set("onlysingular") {
-        row[0].inflected.join("/")
-    } else if word.is_flag_set("onlyplural") {
-        row[1].inflected.join("/")
-    } else {
-        format!(
-            "{}, {}",
-            row[0].inflected.join("/"),
-            row[1].inflected.join("/")
-        )
-    }
-}
-
-fn get_noun_table(word: &Word) -> Result<DeclensionTable, String> {
-    let gender = match word.gender {
-        Gender::MasculineOrFeminine => Gender::Masculine as usize,
-        _ => word.gender as usize,
-    };
-    group_declension_inflections(word, &word.kind, gender)
-}
 
 fn print_noun_inflection(word: &Word) -> Result<(), String> {
     let table = get_noun_table(word)?;
@@ -54,31 +31,6 @@ fn print_noun_inflection(word: &Word) -> Result<(), String> {
     }
 
     Ok(())
-}
-
-fn get_adjective_table(word: &Word) -> Result<[DeclensionTable; 3], String> {
-    // Unless the word is a special "unus nauta" variant, force 1/2 declension
-    // adjectives in the feminine to grab the "a" kind.
-    let kind_f = if word.kind.as_str() == "unusnauta" {
-        &word.kind
-    } else {
-        match word.declension_id {
-            Some(1 | 2) => &"a".to_string(),
-            _ => &word.kind,
-        }
-    };
-
-    let kind_n = if word.kind == "us" {
-        &"um".to_owned()
-    } else {
-        &word.kind
-    };
-
-    Ok([
-        group_declension_inflections(word, &word.kind, Gender::Masculine as usize)?,
-        group_declension_inflections(word, kind_f, Gender::Feminine as usize)?,
-        group_declension_inflections(word, kind_n, Gender::Neuter as usize)?,
-    ])
 }
 
 fn print_adjective_inflection(word: &Word) -> Result<(), String> {
@@ -168,6 +120,7 @@ pub fn print_full_inflection_for(word: Word) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mihi::DeclensionTable;
 
     fn get_word(enunciated: &str) -> Word {
         let words = mihi::select_enunciated(Some(enunciated.to_string())).unwrap();

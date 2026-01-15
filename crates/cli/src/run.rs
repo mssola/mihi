@@ -1,6 +1,9 @@
 use inquire::{Confirm, Editor, Text};
-use mihi::touch_exercise;
-use mihi::{select_relevant_words, update_success, Category, Exercise, ExerciseKind, Word};
+use mihi::{configuration, get_inflected_from};
+use mihi::{
+    get_noun_table, select_relevant_words, touch_exercise, update_success, Category, Exercise,
+    ExerciseKind, Word,
+};
 use std::env;
 use std::fs;
 use std::io::Write;
@@ -26,12 +29,13 @@ fn help(msg: Option<&str>) {
     println!("   -e, --exercises\t\tOnly practice with exercises.");
     println!("   -f, --flag\t\t\tFilter words by a boolean flag. Multiple flags can be provided.");
     println!("   -h, --help\t\t\tPrint this message.");
+    println!("   -i, --inflection\t\tOnly practice word inflections (completing enunciates, declensions and conjugations.");
     println!("   -k, --kind <KIND>\t\tOnly ask for exercises for the given <KIND>.");
 }
 
 // Run the quiz for all the given `words` while expecting answers to be
 // delivered in the given `locale`.
-fn run_words(words: Vec<Word>, locale: &Locale) -> bool {
+fn run_words(words: &Vec<Word>, locale: &Locale) -> bool {
     for word in words {
         // If the translation cannot be found, skip this word.
         let Some(translation) = word.translation.get(locale.to_code()) else {
@@ -50,16 +54,183 @@ fn run_words(words: Vec<Word>, locale: &Locale) -> bool {
 
         if found {
             if word.steps as usize == MAX_STEPS - 1 {
-                let _ = update_success(&word, word.succeeded + 1, 0);
+                let _ = update_success(word, word.succeeded + 1, 0);
             } else {
-                let _ = update_success(&word, word.succeeded, word.steps + 1);
+                let _ = update_success(word, word.succeeded, word.steps + 1);
             }
             println!("\x1b[92m✓ {tr}\x1b[0m");
         } else {
             if word.succeeded > 0 {
-                let _ = update_success(&word, word.succeeded - 1, 0);
+                let _ = update_success(word, word.succeeded - 1, 0);
             }
             println!("\x1b[91m❌{tr}\x1b[0m");
+        }
+    }
+
+    true
+}
+
+fn fill_out_enunciated(word: &Word) -> String {
+    match word.category {
+        Category::Noun | Category::Adjective => {
+            let en = word.enunciated.split(',').next().unwrap_or("");
+            en.to_string()
+        }
+        cat => panic!(
+            "trying to fill out an enunciated from a non-supported category '{}'",
+            cat
+        ),
+    }
+}
+
+// Returns true if both strings are either more or less the same, or the user
+// considers it so.
+fn same_answer(given: &String, expected: &String) -> bool {
+    // If it's literally the same string, then return true.
+    if given == expected {
+        return true;
+    }
+
+    // If it's the same string but just with differences in the white spacing,
+    // return true as well.
+    let trimmed_given: String = given.chars().filter(|c| !c.is_whitespace()).collect();
+    let trimmed_expected: String = expected.chars().filter(|c| !c.is_whitespace()).collect();
+    if trimmed_given == trimmed_expected {
+        return true;
+    }
+
+    // It's something else, then let the user to decide.
+    accepted_diff(given, expected)
+}
+
+fn run_inflect_words(words: &Vec<Word>, locale: &Locale) -> bool {
+    for word in words {
+        // If the translation cannot be found, skip this word.
+        let Some(translation) = word.translation.get(locale.to_code()) else {
+            continue;
+        };
+
+        // Enunciate.
+        println!("Inflect this {}:", word.category);
+        println!("Translation: {}.", translation);
+
+        // Complete the enunciate.
+        let Ok(raw) = Text::new("Enunciated:")
+            .with_initial_value(&fill_out_enunciated(word))
+            .prompt()
+        else {
+            return false;
+        };
+        let answer = raw.trim();
+
+        // Check the answer and update the success rate on the database if
+        // needed.
+        if same_answer(&answer.to_string(), &word.enunciated) {
+            if word.steps as usize == MAX_STEPS - 1 {
+                let _ = update_success(word, word.succeeded + 1, 0);
+            } else {
+                let _ = update_success(word, word.succeeded, word.steps + 1);
+            }
+            println!("\x1b[92m✓\x1b[0m\n");
+        } else {
+            if word.succeeded > 0 {
+                let _ = update_success(word, word.succeeded - 1, 0);
+            }
+            println!("\x1b[91m❌\x1b[0m\n");
+        }
+
+        let mut initial = format!("== {} ==\n\n", word.enunciated);
+        let mut expected = format!("== {} ==\n\n", word.enunciated);
+
+        if let Ok(table) = get_noun_table(word) {
+            for idx in configuration().case_order.to_usizes() {
+                match idx {
+                    0 => {
+                        initial.push_str("Nominative: \n");
+                        expected.push_str(
+                            format!(
+                                "Nominative: {}\n",
+                                get_inflected_from(word, &table.nominative)
+                            )
+                            .as_str(),
+                        );
+                    }
+                    1 => {
+                        initial.push_str("Vocative: \n");
+                        expected.push_str(
+                            format!("Vocative: {}\n", get_inflected_from(word, &table.vocative))
+                                .as_str(),
+                        );
+                    }
+                    2 => {
+                        initial.push_str("Accusative: \n");
+                        expected.push_str(
+                            format!(
+                                "Accusative: {}\n",
+                                get_inflected_from(word, &table.accusative)
+                            )
+                            .as_str(),
+                        );
+                    }
+                    3 => {
+                        initial.push_str("Genitive: \n");
+                        expected.push_str(
+                            format!("Genitive: {}\n", get_inflected_from(word, &table.genitive))
+                                .as_str(),
+                        );
+                    }
+                    4 => {
+                        initial.push_str("Dative: \n");
+                        expected.push_str(
+                            format!("Dative: {}\n", get_inflected_from(word, &table.dative))
+                                .as_str(),
+                        );
+                    }
+                    5 => {
+                        initial.push_str("Ablative: \n");
+                        expected.push_str(
+                            format!("Ablative: {}\n", get_inflected_from(word, &table.ablative))
+                                .as_str(),
+                        );
+                    }
+                    6 => {
+                        if word.locative {
+                            initial.push_str("Locative: \n");
+                            expected.push_str(
+                                format!(
+                                    "Locative: {}\n",
+                                    get_inflected_from(word, &table.locative)
+                                )
+                                .as_str(),
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // Inflection time!
+        let Ok(solution) = Editor::new("Open the editor to inflect:")
+            .with_predefined_text(initial.as_str())
+            .with_file_extension(".md")
+            .prompt()
+        else {
+            return false;
+        };
+
+        if same_answer(&solution, &expected) {
+            if word.steps as usize == MAX_STEPS - 1 {
+                let _ = update_success(word, word.succeeded + 1, 0);
+            } else {
+                let _ = update_success(word, word.succeeded, word.steps + 1);
+            }
+            println!("\x1b[92m✓\x1b[0m\n");
+        } else {
+            if word.succeeded > 0 {
+                let _ = update_success(word, word.succeeded - 1, 0);
+            }
+            println!("\x1b[91m❌\x1b[0m\n");
         }
     }
 
@@ -125,7 +296,7 @@ fn diff_tool() -> Option<&'static str> {
 // and interactively ask the user if things are ok. Returns a boolean depending
 // on the user's answer to that final question, or false if something went
 // wrong.
-fn accepted_diff(given: String, expected: &String) -> bool {
+fn accepted_diff(given: &String, expected: &String) -> bool {
     // If a diff tool could be fetched, then write into temporary files and call
     // the diff tool against both temporary files; otherwise just print things
     // out into the stdout.
@@ -196,7 +367,7 @@ fn run_exercises(exercises: Vec<Exercise>) -> bool {
         // If the exercise is seen as correct by the user, then "touch"
         // (i.e. refresh the 'updated_at' date). This way, next time we select
         // exercises to show the user, we can prevent this one showing up first.
-        if accepted_diff(solution, &exercise.solution) {
+        if accepted_diff(&solution, &exercise.solution) {
             let _ = touch_exercise(exercise);
         }
     }
@@ -209,6 +380,7 @@ pub fn run(args: Vec<String>) {
     let mut category = None;
     let mut kind: Option<ExerciseKind> = None;
     let mut exercises_only = false;
+    let mut inflection_only = false;
     let mut endless = false;
     let mut flags: Vec<String> = vec![];
 
@@ -247,6 +419,9 @@ pub fn run(args: Vec<String>) {
             }
             "-e" | "--exercises" => {
                 exercises_only = true;
+            }
+            "-i" | "--inflection" => {
+                inflection_only = true;
             }
             "--endless" => {
                 endless = true;
@@ -311,23 +486,31 @@ pub fn run(args: Vec<String>) {
     let locale = current_locale();
 
     loop {
+        let words = match category {
+            Some(cat) => select_relevant_words(cat, &flags, 15),
+            None => select_general_words(&flags),
+        };
+
         if !exercises_only {
-            let words = match category {
-                Some(cat) => select_relevant_words(cat, &flags, 15),
-                None => select_general_words(&flags),
-            };
             if let Ok(list) = words {
-                if !run_words(list, &locale) {
+                if !inflection_only && !run_words(&list, &locale) {
                     break;
+                }
+                if let Ok(words_to_inflect) = mihi::select_words_except(&list, &flags) {
+                    if !run_inflect_words(&words_to_inflect, &locale) {
+                        break;
+                    }
                 }
             }
         }
 
-        if let Ok(exercises) =
-            mihi::select_relevant_exercises(kind, if exercises_only { 5 } else { 1 })
-        {
-            if !run_exercises(exercises) {
-                break;
+        if !inflection_only {
+            if let Ok(exercises) =
+                mihi::select_relevant_exercises(kind, if exercises_only { 5 } else { 1 })
+            {
+                if !run_exercises(exercises) {
+                    break;
+                }
             }
         }
 

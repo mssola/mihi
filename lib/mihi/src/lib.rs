@@ -658,6 +658,60 @@ pub fn select_relevant_words(
     Ok(res)
 }
 
+/// Select a set of words except for the ones passed in the `excluded`
+/// vector. It also accepts a set of boolean `flags` as with functions like
+/// `select_relevant_words`.
+pub fn select_words_except(excluded: &[Word], flags: &Vec<String>) -> Result<Vec<Word>, String> {
+    let ids = excluded.iter().map(|w| w.id).collect::<Vec<i32>>();
+    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+
+    let conn = get_connection()?;
+    let mut stmt = conn
+        .prepare(
+            format!(
+                "SELECT id, enunciated, particle, language_id, declension_id, conjugation_id, \
+                    kind, category, regular, locative, gender, suffix, translation, \
+                    succeeded, steps, flags, weight \
+                 FROM words \
+                 WHERE id NOT IN ({}) AND category IN ({}, {}) AND translation != '{{}}' {} \
+                 ORDER BY weight DESC, succeeded ASC, updated_at DESC
+                 LIMIT 5",
+                placeholders,
+                Category::Noun as isize,
+                Category::Adjective as isize,
+                flags_clause(flags)
+            )
+            .as_str(),
+        )
+        .unwrap();
+
+    let mut it = stmt.query(rusqlite::params_from_iter(ids)).unwrap();
+    let mut res = vec![];
+    while let Some(row) = it.next().unwrap() {
+        res.push(Word {
+            id: row.get(0).unwrap(),
+            enunciated: row.get(1).unwrap(),
+            particle: row.get(2).unwrap(),
+            language: row.get::<usize, isize>(3).unwrap().try_into()?,
+            declension_id: row.get(4).unwrap(),
+            conjugation_id: row.get(5).unwrap(),
+            kind: row.get(6).unwrap(),
+            category: row.get::<usize, isize>(7).unwrap().try_into()?,
+            regular: row.get(8).unwrap(),
+            locative: row.get(9).unwrap(),
+            gender: row.get::<usize, isize>(10).unwrap().try_into()?,
+            suffix: row.get(11).unwrap(),
+            translation: serde_json::from_str(&row.get::<usize, String>(12).unwrap()).unwrap(),
+            succeeded: row.get(13).unwrap(),
+            steps: row.get(14).unwrap(),
+            flags: serde_json::from_str(&row.get::<usize, String>(15).unwrap()).unwrap(),
+            weight: row.get(16).unwrap(),
+        });
+    }
+
+    Ok(res)
+}
+
 pub fn update_success(word: &Word, success: isize, steps: isize) -> Result<(), String> {
     let conn = get_connection()?;
 
@@ -1148,6 +1202,60 @@ fn case_str_to_i(key: &str) -> Result<usize, String> {
     }
 }
 
+/// Returns a string which describes the enunciate of the given `word` as
+/// inflected considering the singular/plural declension `row`.
+pub fn get_inflected_from(word: &Word, row: &[DeclensionInfo; 2]) -> String {
+    if word.is_flag_set("onlysingular") {
+        row[0].inflected.join("/")
+    } else if word.is_flag_set("onlyplural") {
+        row[1].inflected.join("/")
+    } else {
+        format!(
+            "{}, {}",
+            row[0].inflected.join("/"),
+            row[1].inflected.join("/")
+        )
+    }
+}
+
+/// Returns the declension table of the given `word` by assuming it's a noun.
+pub fn get_noun_table(word: &Word) -> Result<DeclensionTable, String> {
+    let gender = match word.gender {
+        Gender::MasculineOrFeminine => Gender::Masculine as usize,
+        _ => word.gender as usize,
+    };
+    group_declension_inflections(word, &word.kind, gender)
+}
+
+/// Returns the declension tables for each gender of the given `word` by
+/// assuming it's an adjective.
+pub fn get_adjective_table(word: &Word) -> Result<[DeclensionTable; 3], String> {
+    // Unless the word is a special "unus nauta" variant, force 1/2 declension
+    // adjectives in the feminine to grab the "a" kind.
+    let kind_f = if word.kind.as_str() == "unusnauta" {
+        &word.kind
+    } else {
+        match word.declension_id {
+            Some(1 | 2) => &"a".to_string(),
+            _ => &word.kind,
+        }
+    };
+
+    let kind_n = if word.kind == "us" {
+        &"um".to_owned()
+    } else {
+        &word.kind
+    };
+
+    Ok([
+        group_declension_inflections(word, &word.kind, Gender::Masculine as usize)?,
+        group_declension_inflections(word, kind_f, Gender::Feminine as usize)?,
+        group_declension_inflections(word, kind_n, Gender::Neuter as usize)?,
+    ])
+}
+
+/// Returns the declension table for the given `word` by using the given `kind`
+/// and `gender`.
 pub fn group_declension_inflections(
     word: &Word,
     kind: &String,
