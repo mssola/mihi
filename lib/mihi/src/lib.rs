@@ -659,11 +659,23 @@ pub fn select_relevant_words(
 }
 
 /// Select a set of words except for the ones passed in the `excluded`
-/// vector. It also accepts a set of boolean `flags` as with functions like
-/// `select_relevant_words`.
-pub fn select_words_except(excluded: &[Word], flags: &Vec<String>) -> Result<Vec<Word>, String> {
+/// vector. You have to pass the categories to be selected via the `categories`
+/// parameter, which cannot be empty. It also accepts a set of boolean `flags`
+/// as with functions like `select_relevant_words`.
+pub fn select_words_except(
+    excluded: &[Word],
+    categories: &[Category],
+    flags: &Vec<String>,
+) -> Result<Vec<Word>, String> {
+    assert!(!categories.is_empty());
+
     let ids = excluded.iter().map(|w| w.id).collect::<Vec<i32>>();
     let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let cats = categories
+        .iter()
+        .map(|c| format!("{}", *c as isize))
+        .collect::<Vec<_>>()
+        .join(", ");
 
     let conn = get_connection()?;
     let mut stmt = conn
@@ -673,12 +685,11 @@ pub fn select_words_except(excluded: &[Word], flags: &Vec<String>) -> Result<Vec
                     kind, category, regular, locative, gender, suffix, translation, \
                     succeeded, steps, flags, weight \
                  FROM words \
-                 WHERE id NOT IN ({}) AND category IN ({}, {}) AND translation != '{{}}' {} \
+                 WHERE id NOT IN ({}) AND category IN ({}) AND translation != '{{}}' {} \
                  ORDER BY weight DESC, succeeded ASC, updated_at DESC
                  LIMIT 5",
                 placeholders,
-                Category::Noun as isize,
-                Category::Adjective as isize,
+                cats,
                 flags_clause(flags)
             )
             .as_str(),

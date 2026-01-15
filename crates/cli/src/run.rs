@@ -496,7 +496,11 @@ pub fn run(args: Vec<String>) {
                 if !inflection_only && !run_words(&list, &locale) {
                     break;
                 }
-                if let Ok(words_to_inflect) = mihi::select_words_except(&list, &flags) {
+                let cats = match category {
+                    Some(cat) => vec![cat],
+                    None => vec![Category::Noun, Category::Adjective],
+                };
+                if let Ok(words_to_inflect) = mihi::select_words_except(&list, &cats, &flags) {
                     if !run_inflect_words(&words_to_inflect, &locale) {
                         break;
                     }
