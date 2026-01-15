@@ -311,40 +311,28 @@ pub fn run(args: Vec<String>) {
     let locale = current_locale();
 
     loop {
-        let words = match category {
-            Some(cat) => select_relevant_words(cat, &flags, 15),
-            None => select_general_words(&flags),
-        };
-
-        let exercises =
-            match mihi::select_relevant_exercises(kind, if exercises_only { 5 } else { 1 }) {
-                Ok(exercises) => exercises,
-                Err(e) => {
-                    println!("error: practice: {e}");
-                    std::process::exit(1);
-                }
+        if !exercises_only {
+            let words = match category {
+                Some(cat) => select_relevant_words(cat, &flags, 15),
+                None => select_general_words(&flags),
             };
-
-        let code = match words {
-            Ok(list) => {
-                if !exercises_only
-                    && !run_words(list, &locale) {
-                        std::process::exit(1);
-                    }
-                if !run_exercises(exercises) {
-                    std::process::exit(1);
+            if let Ok(list) = words {
+                if !run_words(list, &locale) {
+                    break;
                 }
+            }
+        }
 
-                0
+        if let Ok(exercises) =
+            mihi::select_relevant_exercises(kind, if exercises_only { 5 } else { 1 })
+        {
+            if !run_exercises(exercises) {
+                break;
             }
-            Err(e) => {
-                println!("error: practice: {e}");
-                1
-            }
-        };
+        }
 
         if !endless {
-            std::process::exit(code);
+            break;
         }
     }
 }
