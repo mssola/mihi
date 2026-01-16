@@ -1,4 +1,5 @@
 use serde_json::Value;
+use std::convert::TryFrom;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
@@ -257,6 +258,107 @@ pub fn init_database() -> Result<(), String> {
     }
 }
 
+/// Defines in which way two words are related.
+#[derive(Clone, Debug)]
+pub enum RelationKind {
+    /// The destination word is the comparative of the source (e.g. 'magnus,
+    /// magna, magnum' -> has irregular comparative -> 'māior, māius').
+    Comparative = 1,
+
+    /// The destination word is the superlative of the source (e.g. 'magnus,
+    /// magna, magnum' -> has irregular superlative -> 'maximus, maxima,
+    /// maximum').
+    Superlative,
+
+    /// The destination word is the adverb of the other (e.g. 'magnus, magna,
+    /// magnum' -> has an adverb -> 'magnē').
+    Adverb,
+
+    /// Two given words are the alternative of the other because of their root
+    /// or because of some sort of historical contraction (e.g. 'nihil' <->
+    /// 'nīl', or the root on 'versō' <-> 'vōrsō').
+    Alternative,
+
+    /// One is the gendered alternative of the other (e.g. 'victor' <->
+    /// 'victrix').
+    Gendered,
+}
+
+impl TryFrom<isize> for RelationKind {
+    type Error = String;
+
+    fn try_from(v: isize) -> Result<Self, Self::Error> {
+        match v {
+            1 => Ok(RelationKind::Comparative),
+            2 => Ok(RelationKind::Superlative),
+            3 => Ok(RelationKind::Adverb),
+            4 => Ok(RelationKind::Alternative),
+            5 => Ok(RelationKind::Gendered),
+            _ => Err(format!("unknown relation kind value '{}'", v)),
+        }
+    }
+}
+
+/// Join by enunciate the given words.
+pub fn joint_related_words(related: &Vec<Word>) -> String {
+    return related
+        .iter()
+        .map(|w| w.enunciated.clone())
+        .collect::<Vec<String>>()
+        .join("; ");
+}
+
+/// Returns a string with the enunciate of the comparative form of the given
+/// `word`. This function assumes that it really does, or at least it's
+/// contained in the `related` vector.
+pub fn comparative(word: &Word, related: &Vec<Word>) -> String {
+    if !related.is_empty() {
+        return joint_related_words(related);
+    }
+    if word.is_flag_set("compsup_prefix") {
+        return format!("magis {}", word.singular_nominative());
+    }
+
+    let part = word.real_particle();
+    format!("{part}ior, {part}ius")
+}
+
+/// Returns a string with the enunciate of the superlative form of the given
+/// `word`. This function assumes that it really does, or at least it's
+/// contained in the `related` vector.
+pub fn superlative(word: &Word, related: &Vec<Word>) -> String {
+    if !related.is_empty() {
+        return joint_related_words(related);
+    }
+    if word.is_flag_set("compsup_prefix") {
+        return format!("maximē {}", word.singular_nominative());
+    }
+
+    let part = &word.particle;
+    if word.is_flag_set("irregularsup") {
+        return format!("{part}limus, {part}lima, {part}limum");
+    } else if word.is_flag_set("contracted_root") {
+        return format!("{part}rimus, {part}rima, {part}rimum");
+    }
+    format!("{part}issimus, {part}issima, {part}issimum")
+}
+
+/// Returns a string with the enunciate of the adverbial form of the given
+/// `word`. This function assumes that it really does, or at least it's
+/// contained in the `related` vector.
+pub fn adverb(word: &Word, related: &Vec<Word>) -> String {
+    if !related.is_empty() {
+        return joint_related_words(related);
+    }
+
+    let part = word.real_particle();
+    match word.declension_id {
+        Some(1 | 2) => format!("{part}ē"),
+        Some(3) => format!("{part}iter"),
+        _ => "<unknown>".to_string(),
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Word {
     pub id: i32,
@@ -321,6 +423,27 @@ impl Word {
             Some(value) => value.as_bool().unwrap_or_default(),
             None => false,
         }
+    }
+
+    /// Returns the nominative version of the enunciate.
+    pub fn singular_nominative(&self) -> String {
+        self.enunciated
+            .split(',')
+            .nth(0)
+            .unwrap_or("")
+            .trim()
+            .to_string()
+    }
+
+    pub fn real_particle(&self) -> String {
+        if self.is_flag_set("contracted_root") {
+            return format!(
+                "{}{}",
+                self.particle[0..(self.particle.len() - 2)].to_string(),
+                self.particle.chars().last().unwrap_or(' '),
+            );
+        }
+        self.particle.clone()
     }
 }
 
@@ -548,6 +671,52 @@ pub fn select_enunciated(filter: Option<String>) -> Result<Vec<String>, String> 
     while let Some(row) = it.next().unwrap() {
         res.push(row.get::<usize, String>(0).unwrap());
     }
+    Ok(res)
+}
+
+/// Returns all words that are related to the given `word` in one way or
+/// another. The result is given as an array where each element is indexed by
+/// RelationKind, and has a vector of words following that relationship.
+pub fn select_related_words(word: &Word) -> Result<[Vec<Word>; 5], String> {
+    let mut res = [vec![], vec![], vec![], vec![], vec![]];
+
+    let conn = get_connection()?;
+    let mut stmt = conn
+        .prepare(
+                "SELECT w.id, w.enunciated, w.particle, w.language_id, w.declension_id, w.conjugation_id, \
+                    w.kind as wkind, w.category, w.regular, w.locative, w.gender, w.suffix, w.translation, \
+                    w.succeeded, w.steps, w.flags, w.weight, r.kind as rkind \
+                 FROM words w \
+                 JOIN word_relations r ON w.id = r.destination_id
+                 WHERE r.source_id = ?1",
+        )
+        .unwrap();
+    let mut it = stmt.query([word.id]).unwrap();
+
+    while let Some(row) = it.next().unwrap() {
+        let relation: RelationKind = row.get::<usize, isize>(17).unwrap().try_into()?;
+
+        res[relation as usize - 1].push(Word {
+            id: row.get(0).unwrap(),
+            enunciated: row.get(1).unwrap(),
+            particle: row.get(2).unwrap(),
+            language: row.get::<usize, isize>(3).unwrap().try_into()?,
+            declension_id: row.get(4).unwrap(),
+            conjugation_id: row.get(5).unwrap(),
+            kind: row.get(6).unwrap(),
+            category: row.get::<usize, isize>(7).unwrap().try_into()?,
+            regular: row.get(8).unwrap(),
+            locative: row.get(9).unwrap(),
+            gender: row.get::<usize, isize>(10).unwrap().try_into()?,
+            suffix: row.get(11).unwrap(),
+            translation: serde_json::from_str(&row.get::<usize, String>(12).unwrap()).unwrap(),
+            succeeded: row.get(13).unwrap(),
+            steps: row.get(14).unwrap(),
+            flags: serde_json::from_str(&row.get::<usize, String>(15).unwrap()).unwrap(),
+            weight: row.get(16).unwrap(),
+        });
+    }
+
     Ok(res)
 }
 

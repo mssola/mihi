@@ -2,7 +2,10 @@ use crate::inflection::print_full_inflection_for;
 use crate::locale::current_locale;
 
 use inquire::{Confirm, Editor, Select, Text};
-use mihi::{Category, Gender, Language, Word};
+use mihi::{
+    adverb, comparative, joint_related_words, select_related_words, superlative, Category, Gender,
+    Language, RelationKind, Word,
+};
 use std::vec::IntoIter;
 
 static NEW_MESSAGE: &str = "New word";
@@ -628,6 +631,43 @@ fn show_info(word: Word) -> Result<(), String> {
         }
     };
 
+    // Show relationships with other words.
+
+    let related = select_related_words(&word)?;
+
+    if matches!(word.category, Category::Adjective) {
+        print!(
+            "Comparative: {} || ",
+            comparative(&word, &related[RelationKind::Comparative as usize - 1])
+        );
+        print!(
+            "Superlative: {} || ",
+            superlative(&word, &related[RelationKind::Superlative as usize - 1])
+        );
+        println!(
+            "Adverb: {}",
+            adverb(&word, &related[RelationKind::Adverb as usize - 1])
+        );
+    }
+
+    let alternatives = &related[RelationKind::Alternative as usize - 1];
+    match alternatives.len() {
+        0 => {}
+        1 => println!("Alternative: {}", joint_related_words(&alternatives)),
+        _ => println!("Alternatives: {}", joint_related_words(&alternatives)),
+    }
+    let gendered = &related[RelationKind::Gendered as usize - 1];
+    let g = if matches!(word.gender, Gender::Masculine) {
+        "Feminine"
+    } else {
+        "Masculine"
+    };
+    match gendered.len() {
+        0 => {}
+        1 => println!("{g} alternative: {}", joint_related_words(&gendered)),
+        _ => println!("{g} alternatives: {}", joint_related_words(&gendered)),
+    }
+
     // Show translation if available.
     let locale = current_locale();
     if let Some(translation) = word.translation.get(locale.to_code()) {
@@ -757,5 +797,50 @@ pub fn run(args: Vec<String>) {
             ));
             std::process::exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Returns a string with the format "{comparative form}-{superlative
+    // form}-{adverbial form}-{alternatives}-{gendered alternatives}".
+    fn related_for(enunciated: &str) -> String {
+        let word = mihi::find_by(enunciated).unwrap();
+        let related = select_related_words(&word).unwrap();
+        let alternatives = &related[RelationKind::Alternative as usize - 1];
+        let gendered = &related[RelationKind::Gendered as usize - 1];
+
+        let first = if matches!(word.category, Category::Adjective) {
+            format!(
+                "{}-{}-{}",
+                comparative(&word, &related[RelationKind::Comparative as usize - 1]),
+                superlative(&word, &related[RelationKind::Superlative as usize - 1]),
+                adverb(&word, &related[RelationKind::Adverb as usize - 1])
+            )
+        } else {
+            "--".to_string()
+        };
+
+        format!(
+            "{}-{}-{}",
+            first,
+            mihi::joint_related_words(&alternatives),
+            mihi::joint_related_words(&gendered)
+        )
+    }
+
+    #[test]
+    fn related() {
+        assert_eq!(
+            related_for("parvus, parva, parvum"),
+            "minor, minus-minimus, minima, minimum-parvē--"
+        );
+        assert_eq!(
+            related_for("versō, versāre, versāvī, versātum"),
+            "---vorsō, vorsāre, vorsāvī, vorsātum-"
+        );
+        assert_eq!(related_for("victor, victōris"), "----victrīx, victrīcis");
     }
 }
