@@ -74,6 +74,7 @@ fn help(msg: Option<&str>) {
     println!("   create\t\tCreate a new word.");
     println!("   edit\t\t\tEdit information from a word.");
     println!("   ls\t\t\tList the words from the database.");
+    println!("   poke\t\t\tUpdate the timestamp for a word.");
     println!("   rm\t\t\tRemove a word from the database.");
     println!("   show\t\t\tShow information from a word.");
 }
@@ -682,6 +683,29 @@ fn show_info(word: Word) -> Result<(), String> {
     Ok(())
 }
 
+fn poke(mut args: IntoIter<String>) -> i32 {
+    if args.len() > 1 {
+        help(Some(
+            "error: words: only one argument. If it's an enunciate, wrap it in double quotes",
+        ));
+        return 1;
+    }
+
+    let enunciated = match select_single_word(args.next()) {
+        Ok(word) => word,
+        Err(e) => {
+            println!("error: words: {e}.");
+            return 1;
+        }
+    };
+
+    if mihi::update_timestamp(enunciated.as_str()).is_ok() {
+        0
+    } else {
+        1
+    }
+}
+
 fn show(mut args: IntoIter<String>) -> i32 {
     if args.len() > 1 {
         help(Some(
@@ -775,6 +799,9 @@ pub fn run(args: Vec<String>) {
             }
             "ls" => {
                 std::process::exit(ls(it));
+            }
+            "poke" => {
+                std::process::exit(poke(it));
             }
             "rm" => {
                 std::process::exit(rm(it));

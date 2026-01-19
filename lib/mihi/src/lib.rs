@@ -646,6 +646,24 @@ pub fn update_word(word: Word) -> Result<(), String> {
     }
 }
 
+/// Update the `updated_at` timestamp for any word matching the given
+/// `enunciated` string. In theory the given enunciated should identify only a
+/// single word, but nothing forbids the caller from updating every word which
+/// somehow matches the given string.
+pub fn update_timestamp(enunciated: &str) -> Result<(), String> {
+    let conn = get_connection()?;
+
+    match conn.execute(
+        "UPDATE words \
+         SET updated_at = datetime('now') \
+         WHERE enunciated = ?1",
+        params![enunciated],
+    ) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("could not update '{}': {}", enunciated, e)),
+    }
+}
+
 pub fn select_enunciated(filter: Option<String>) -> Result<Vec<String>, String> {
     let conn = get_connection()?;
 
