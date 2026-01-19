@@ -300,18 +300,18 @@ impl TryFrom<isize> for RelationKind {
 }
 
 /// Join by enunciate the given words.
-pub fn joint_related_words(related: &Vec<Word>) -> String {
-    return related
+pub fn joint_related_words(related: &[Word]) -> String {
+    related
         .iter()
         .map(|w| w.enunciated.clone())
         .collect::<Vec<String>>()
-        .join("; ");
+        .join("; ")
 }
 
 /// Returns a string with the enunciate of the comparative form of the given
 /// `word`. This function assumes that it really does, or at least it's
 /// contained in the `related` vector.
-pub fn comparative(word: &Word, related: &Vec<Word>) -> String {
+pub fn comparative(word: &Word, related: &[Word]) -> String {
     if !related.is_empty() {
         return joint_related_words(related);
     }
@@ -326,7 +326,7 @@ pub fn comparative(word: &Word, related: &Vec<Word>) -> String {
 /// Returns a string with the enunciate of the superlative form of the given
 /// `word`. This function assumes that it really does, or at least it's
 /// contained in the `related` vector.
-pub fn superlative(word: &Word, related: &Vec<Word>) -> String {
+pub fn superlative(word: &Word, related: &[Word]) -> String {
     if !related.is_empty() {
         return joint_related_words(related);
     }
@@ -346,7 +346,7 @@ pub fn superlative(word: &Word, related: &Vec<Word>) -> String {
 /// Returns a string with the enunciate of the adverbial form of the given
 /// `word`. This function assumes that it really does, or at least it's
 /// contained in the `related` vector.
-pub fn adverb(word: &Word, related: &Vec<Word>) -> String {
+pub fn adverb(word: &Word, related: &[Word]) -> String {
     if !related.is_empty() {
         return joint_related_words(related);
     }
@@ -439,7 +439,7 @@ impl Word {
         if self.is_flag_set("contracted_root") {
             return format!(
                 "{}{}",
-                self.particle[0..(self.particle.len() - 2)].to_string(),
+                &self.particle[0..(self.particle.len() - 2)],
                 self.particle.chars().last().unwrap_or(' '),
             );
         }

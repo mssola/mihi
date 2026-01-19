@@ -1,9 +1,11 @@
+extern crate rand;
 use inquire::{Confirm, Editor, Text};
-use mihi::{configuration, get_adjective_table, get_inflected_from};
+use mihi::{configuration, get_adjective_table, get_inflected_from, select_related_words};
 use mihi::{
     get_noun_table, select_relevant_words, touch_exercise, update_success, Category,
-    DeclensionTable, Exercise, ExerciseKind, Word,
+    DeclensionTable, Exercise, ExerciseKind, RelationKind, Word,
 };
+use rand::prelude::*;
 use std::env;
 use std::fs;
 use std::io::Write;
@@ -182,16 +184,102 @@ fn ask_for_table(word: &Word, table: &DeclensionTable, id: Option<&str>) -> bool
     same_answer(&solution, &expected)
 }
 
+// Ask for alternative forms (gendered or otherwise) about a given word.
+fn ask_for_alternatives(related: &[Vec<Word>; 5]) -> bool {
+    let alternatives = &related[RelationKind::Alternative as usize - 1];
+    if !alternatives.is_empty() {
+        let Ok(raw) =
+            Text::new("Do you know of any alternative (not asking about a gendered one)?").prompt()
+        else {
+            return false;
+        };
+        let expected = mihi::joint_related_words(alternatives);
+        if !same_answer(&raw, &expected) {
+            return false;
+        }
+    }
+
+    let gendered = &related[RelationKind::Gendered as usize - 1];
+    if !gendered.is_empty() {
+        let Ok(raw) = Text::new("Do you know of the same word but on the other gender?").prompt()
+        else {
+            return false;
+        };
+        let expected = mihi::joint_related_words(gendered);
+        if !same_answer(&raw, &expected) {
+            return false;
+        }
+    }
+
+    true
+}
+
+// Ask for other forms for the given word (i.e. comparative, superlative,
+// adverbial).
+//
+// NOTE: this word _has_ to be an adjective.
+fn ask_for_others(word: &Word, related: &[Vec<Word>; 5]) -> bool {
+    assert!(matches!(word.category, Category::Adjective));
+
+    let comparative = mihi::comparative(word, &related[RelationKind::Comparative as usize - 1]);
+    let Ok(raw) = Text::new("Comparative:").prompt() else {
+        return false;
+    };
+    if !same_answer(&raw, &comparative) {
+        return false;
+    }
+
+    let superlative = mihi::superlative(word, &related[RelationKind::Superlative as usize - 1]);
+    let Ok(raw) = Text::new("Superlative:").prompt() else {
+        return false;
+    };
+    if !same_answer(&raw, &superlative) {
+        return false;
+    }
+
+    let adverbial = mihi::adverb(word, &related[RelationKind::Adverb as usize - 1]);
+    let Ok(raw) = Text::new("Adverb:").prompt() else {
+        return false;
+    };
+    if !same_answer(&raw, &adverbial) {
+        return false;
+    }
+
+    true
+}
+
 fn good_noun_inflection(word: &Word) -> bool {
     if let Ok(table) = get_noun_table(word) {
-        return ask_for_table(word, &table, None);
+        if !ask_for_table(word, &table, None) {
+            return false;
+        }
+        if let Ok(related) = select_related_words(word) {
+            return ask_for_alternatives(&related);
+        }
     }
     true
 }
 
 fn good_adjective_inflection(word: &Word) -> bool {
     if let Ok(tables) = get_adjective_table(word) {
-        ask_for_table(word, &tables[0], Some("in the masculine"));
+        // Pick which gender from the adjective table to ask.
+        let mut rng = rand::rng();
+        let gender = rng.random_range(0..=2);
+        let suffix = match gender {
+            1 => Some("in the feminine"),
+            2 => Some("in the neuter"),
+            _ => Some("in the masculine"),
+        };
+
+        if !ask_for_table(word, &tables[gender], suffix) {
+            return false;
+        }
+        if let Ok(related) = select_related_words(word) {
+            if !ask_for_others(word, &related) {
+                return false;
+            }
+            return ask_for_alternatives(&related);
+        }
     }
     true
 }

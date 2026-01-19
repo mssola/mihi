@@ -653,8 +653,8 @@ fn show_info(word: Word) -> Result<(), String> {
     let alternatives = &related[RelationKind::Alternative as usize - 1];
     match alternatives.len() {
         0 => {}
-        1 => println!("Alternative: {}", joint_related_words(&alternatives)),
-        _ => println!("Alternatives: {}", joint_related_words(&alternatives)),
+        1 => println!("Alternative: {}", joint_related_words(alternatives)),
+        _ => println!("Alternatives: {}", joint_related_words(alternatives)),
     }
     let gendered = &related[RelationKind::Gendered as usize - 1];
     let g = if matches!(word.gender, Gender::Masculine) {
@@ -664,8 +664,8 @@ fn show_info(word: Word) -> Result<(), String> {
     };
     match gendered.len() {
         0 => {}
-        1 => println!("{g} alternative: {}", joint_related_words(&gendered)),
-        _ => println!("{g} alternatives: {}", joint_related_words(&gendered)),
+        1 => println!("{g} alternative: {}", joint_related_words(gendered)),
+        _ => println!("{g} alternatives: {}", joint_related_words(gendered)),
     }
 
     // Show translation if available.
@@ -826,8 +826,8 @@ mod tests {
         format!(
             "{}-{}-{}",
             first,
-            mihi::joint_related_words(&alternatives),
-            mihi::joint_related_words(&gendered)
+            mihi::joint_related_words(alternatives),
+            mihi::joint_related_words(gendered)
         )
     }
 
