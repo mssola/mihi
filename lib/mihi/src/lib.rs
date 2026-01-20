@@ -782,7 +782,7 @@ pub fn find_by(enunciated: &str) -> Result<Word, String> {
 // `flags` are set for a row. If no flags are given, then an empty string is
 // returned. Otherwise the string is prepended by an "AND" clause, meaning that
 // it expects the caller to have other clauses before this one.
-fn flags_clause(flags: &Vec<String>) -> String {
+fn flags_clause(flags: &[String]) -> String {
     if flags.is_empty() {
         return "".to_string();
     }
@@ -796,15 +796,18 @@ fn flags_clause(flags: &Vec<String>) -> String {
 }
 
 // Select a maximum of `number` words which match a given word `category` and
-// have set one of the given boolean `flags`.
+// have set one of the given boolean `flags`. You may also pass a `tags` vector
+// which contains the name of the tags for which each word must have at least
+// one match.
 pub fn select_relevant_words(
     category: Category,
-    flags: &Vec<String>,
+    flags: &[String],
+    tags: &[String],
     number: isize,
 ) -> Result<Vec<Word>, String> {
     let conn = get_connection()?;
-    let mut stmt = conn
-        .prepare(
+    let mut stmt = if tags.is_empty() {
+        conn.prepare(
             format!(
                 "SELECT id, enunciated, particle, language_id, declension_id, conjugation_id, \
                     kind, category, regular, locative, gender, suffix, translation, \
@@ -817,7 +820,26 @@ pub fn select_relevant_words(
             )
             .as_str(),
         )
-        .unwrap();
+        .unwrap()
+    } else {
+        conn.prepare(
+            format!(
+                "SELECT w.id, w.enunciated, w.particle, w.language_id, w.declension_id, w.conjugation_id, \
+                    w.kind, w.category, w.regular, w.locative, w.gender, w.suffix, w.translation, \
+                    w.succeeded, w.steps, w.flags, w.weight \
+                 FROM words w \
+                 JOIN tag_associations ta ON w.id = ta.word_id \
+                 JOIN tags t ON t.id = ta.tag_id \
+                 WHERE w.category = ?1 AND t.name IN ({}) AND w.translation != '{{}}' {} \
+                 ORDER BY w.weight DESC, w.succeeded ASC, w.updated_at DESC
+                 LIMIT ?2",
+                tags.iter().map(|t| format!("'{}'", t)).collect::<Vec<_>>().join(", "),
+                flags_clause(flags)
+            )
+            .as_str(),
+        )
+        .unwrap()
+    };
     let mut it = stmt.query([category as isize, number]).unwrap();
 
     let mut res = vec![];
@@ -848,11 +870,13 @@ pub fn select_relevant_words(
 /// Select a set of words except for the ones passed in the `excluded`
 /// vector. You have to pass the categories to be selected via the `categories`
 /// parameter, which cannot be empty. It also accepts a set of boolean `flags`
-/// as with functions like `select_relevant_words`.
+/// as with functions like `select_relevant_words`; and the `tags` filtering
+/// option.
 pub fn select_words_except(
     excluded: &[Word],
     categories: &[Category],
-    flags: &Vec<String>,
+    flags: &[String],
+    tags: &[String],
 ) -> Result<Vec<Word>, String> {
     assert!(!categories.is_empty());
 
@@ -865,8 +889,8 @@ pub fn select_words_except(
         .join(", ");
 
     let conn = get_connection()?;
-    let mut stmt = conn
-        .prepare(
+    let mut stmt = if tags.is_empty() {
+        conn.prepare(
             format!(
                 "SELECT id, enunciated, particle, language_id, declension_id, conjugation_id, \
                     kind, category, regular, locative, gender, suffix, translation, \
@@ -881,7 +905,28 @@ pub fn select_words_except(
             )
             .as_str(),
         )
-        .unwrap();
+        .unwrap()
+    } else {
+        conn.prepare(
+            format!(
+                "SELECT w.id, w.enunciated, w.particle, w.language_id, w.declension_id, w.conjugation_id, \
+                    w.kind, w.category, w.regular, w.locative, w.gender, w.suffix, w.translation, \
+                    w.succeeded, w.steps, w.flags, w.weight \
+                 FROM words w \
+                 JOIN tag_associations ta ON w.id = ta.word_id \
+                 JOIN tags t ON t.id = ta.tag_id \
+                 WHERE w.id NOT IN ({}) AND t.name IN ({}) AND w.category IN ({}) AND w.translation != '{{}}' {} \
+                 ORDER BY w.weight DESC, w.succeeded ASC, w.updated_at DESC
+                 LIMIT 5",
+                placeholders,
+                tags.iter().map(|t| format!("'{}'", t)).collect::<Vec<_>>().join(", "),
+                cats,
+                flags_clause(flags)
+            )
+            .as_str(),
+        )
+        .unwrap()
+    };
 
     let mut it = stmt.query(rusqlite::params_from_iter(ids)).unwrap();
     let mut res = vec![];

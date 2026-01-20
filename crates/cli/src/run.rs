@@ -33,6 +33,7 @@ fn help(msg: Option<&str>) {
     println!("   -h, --help\t\t\tPrint this message.");
     println!("   -i, --inflection\t\tOnly practice word inflections (completing enunciates, declensions and conjugations.");
     println!("   -k, --kind <KIND>\t\tOnly ask for exercises for the given <KIND>.");
+    println!("   -t, --tag <NAME>\t\tFilter words which match the given tag NAME. Multiple tags can be provided to match words with any of the tags provided.");
 }
 
 // Run the quiz for all the given `words` while expecting answers to be
@@ -350,14 +351,39 @@ fn run_inflect_words(words: &Vec<Word>, locale: &Locale) -> bool {
 
 // Returns a vector of words which contain a randomized set of words from
 // different categories.
-fn select_general_words(flags: &Vec<String>) -> Result<Vec<Word>, String> {
-    let mut res = select_relevant_words(Category::Noun, flags, 4)?;
-    res.append(&mut select_relevant_words(Category::Adjective, flags, 2)?);
-    res.append(&mut select_relevant_words(Category::Verb, flags, 4)?);
-    res.append(&mut select_relevant_words(Category::Pronoun, flags, 1)?);
-    res.append(&mut select_relevant_words(Category::Adverb, flags, 2)?);
-    res.append(&mut select_relevant_words(Category::Preposition, flags, 1)?);
-    res.append(&mut select_relevant_words(Category::Conjunction, flags, 1)?);
+fn select_general_words(flags: &[String], tags: &[String]) -> Result<Vec<Word>, String> {
+    let mut res = select_relevant_words(Category::Noun, flags, tags, 4)?;
+    res.append(&mut select_relevant_words(
+        Category::Adjective,
+        flags,
+        tags,
+        2,
+    )?);
+    res.append(&mut select_relevant_words(Category::Verb, flags, tags, 4)?);
+    res.append(&mut select_relevant_words(
+        Category::Pronoun,
+        flags,
+        tags,
+        1,
+    )?);
+    res.append(&mut select_relevant_words(
+        Category::Adverb,
+        flags,
+        tags,
+        2,
+    )?);
+    res.append(&mut select_relevant_words(
+        Category::Preposition,
+        flags,
+        tags,
+        1,
+    )?);
+    res.append(&mut select_relevant_words(
+        Category::Conjunction,
+        flags,
+        tags,
+        1,
+    )?);
     Ok(res)
 }
 
@@ -494,6 +520,7 @@ pub fn run(args: Vec<String>) {
     let mut inflection_only = false;
     let mut endless = false;
     let mut flags: Vec<String> = vec![];
+    let mut tags: Vec<String> = vec![];
 
     while let Some(first) = it.next() {
         match first.as_str() {
@@ -585,6 +612,22 @@ pub fn run(args: Vec<String>) {
                     }
                 }
             }
+            "-t" | "--tag" => match it.next() {
+                Some(t) => {
+                    let name = t.trim().to_string();
+                    if let Ok(results) = mihi::select_tag_names(&Some(name.clone())) {
+                        if results.is_empty() {
+                            println!("warning: practice: the tag '{}' does not exist.", name);
+                        } else {
+                            tags.push(name)
+                        }
+                    }
+                }
+                None => {
+                    help(Some("error: practice: you have to provide a tag name"));
+                    std::process::exit(1);
+                }
+            },
             _ => {
                 help(Some(
                     format!("error: practice: unknown flag or command '{first}'").as_str(),
@@ -597,9 +640,10 @@ pub fn run(args: Vec<String>) {
     let locale = current_locale();
 
     loop {
+        // Select the words depending on the selected category, flags, etc.
         let words = match category {
-            Some(cat) => select_relevant_words(cat, &flags, 15),
-            None => select_general_words(&flags),
+            Some(cat) => select_relevant_words(cat, &flags, &tags, 15),
+            None => select_general_words(&flags, &tags),
         };
 
         if !exercises_only {
@@ -611,7 +655,8 @@ pub fn run(args: Vec<String>) {
                     Some(cat) => vec![cat],
                     None => vec![Category::Noun, Category::Adjective],
                 };
-                if let Ok(words_to_inflect) = mihi::select_words_except(&list, &cats, &flags) {
+                if let Ok(words_to_inflect) = mihi::select_words_except(&list, &cats, &flags, &tags)
+                {
                     if !run_inflect_words(&words_to_inflect, &locale) {
                         break;
                     }
