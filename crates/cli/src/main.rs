@@ -4,6 +4,7 @@ mod init;
 mod locale;
 mod nuke;
 mod run;
+mod tags;
 mod words;
 
 /// Version for this program.
@@ -59,6 +60,10 @@ fn main() {
             "nuke" => {
                 let rest: Vec<String> = args.collect();
                 nuke::run(rest);
+            }
+            "tags" => {
+                let rest: Vec<String> = args.collect();
+                tags::run(rest);
             }
             "words" => {
                 let rest: Vec<String> = args.collect();

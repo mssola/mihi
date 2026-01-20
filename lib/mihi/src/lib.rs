@@ -910,6 +910,56 @@ pub fn select_words_except(
     Ok(res)
 }
 
+/// Returns a vector with the names for tags that match the given `filter`, or
+/// all of them if None is passed as the filter.
+pub fn select_tag_names(filter: &Option<String>) -> Result<Vec<String>, String> {
+    let conn = get_connection()?;
+
+    let mut stmt;
+    let mut it = match filter {
+        Some(filter) => {
+            stmt = conn
+                .prepare("SELECT name FROM tags WHERE name LIKE ('%' || ?1 || '%') ORDER BY name")
+                .unwrap();
+            stmt.query([filter.as_str()]).unwrap()
+        }
+        None => {
+            stmt = conn.prepare("SELECT name FROM tags ORDER BY name").unwrap();
+            stmt.query([]).unwrap()
+        }
+    };
+
+    let mut res = vec![];
+    while let Some(row) = it.next().unwrap() {
+        res.push(row.get::<usize, String>(0).unwrap());
+    }
+    Ok(res)
+}
+
+/// Insert into the database the tag identified by the given name.
+pub fn create_tag(name: &str) -> Result<(), String> {
+    let conn = get_connection()?;
+
+    match conn.execute(
+        "INSERT INTO tags (name, updated_at, created_at) \
+         VALUES (?1, datetime('now'), datetime('now'))",
+        params![name.trim()],
+    ) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("could not create '{}': {}", name, e)),
+    }
+}
+
+/// Delete the tag from the database.
+pub fn delete_tag(name: &String) -> Result<(), String> {
+    let conn = get_connection()?;
+
+    match conn.execute("DELETE FROM tags WHERE name = ?1", params![name.trim()]) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("could not remove '{name}': {e}")),
+    }
+}
+
 pub fn update_success(word: &Word, success: isize, steps: isize) -> Result<(), String> {
     let conn = get_connection()?;
 

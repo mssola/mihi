@@ -1,11 +1,5 @@
 use rusqlite::{Connection, Result};
 
-// TODO: not just the definition, but also the bootstrapping (into Git as there is nothing sensitive?).
-//  - conjugations
-//  - declensions
-//  - forms
-//  - word_relations
-
 /// Use the given `connection` in order to initialize the database.
 pub fn init(connection: Connection) -> Result<usize> {
     connection.execute(
@@ -67,6 +61,39 @@ CREATE TABLE IF NOT EXISTS "exercises" (
     connection.execute(
         r#"
 CREATE UNIQUE INDEX IF NOT EXISTS "index_exercises_on_title" ON "exercises" ("title");
+"#,
+        (),
+    )?;
+
+    connection.execute(
+        r#"
+CREATE TABLE IF NOT EXISTS "tags" (
+       "id" integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+       "name" varchar NOT NULL,
+       "created_at" datetime(6) NOT NULL,
+       "updated_at" datetime(6) NOT NULL
+);
+"#,
+        (),
+    )?;
+
+    connection.execute(
+        r#"
+CREATE TABLE IF NOT EXISTS "tag_associations" (
+       "id" integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+       "word_id" integer NOT NULL,
+       "tag_id" integer NOT NULL,
+       "created_at" datetime(6) NOT NULL,
+       "updated_at" datetime(6) NOT NULL
+);
+"#,
+        (),
+    )?;
+
+    connection.execute(
+        r#"
+CREATE UNIQUE INDEX IF NOT EXISTS "index_tags_on_name" ON "tags" ("name");
+CREATE UNIQUE INDEX IF NOT EXISTS "word_tag_unique" ON tag_associations (word_id, tag_id);
 "#,
         (),
     )?;
