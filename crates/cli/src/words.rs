@@ -1,10 +1,10 @@
 use crate::inflection::print_full_inflection_for;
 use crate::locale::current_locale;
 
-use inquire::{Confirm, Editor, Select, Text};
+use inquire::{Confirm, Editor, MultiSelect, Select, Text};
 use mihi::{
-    adverb, comparative, joint_related_words, select_related_words, superlative, Category, Gender,
-    Language, RelationKind, Word,
+    adverb, comparative, joint_related_words, select_related_words, select_tags_for, superlative,
+    Category, Gender, Language, RelationKind, Word,
 };
 use std::vec::IntoIter;
 
@@ -388,9 +388,22 @@ fn do_create(enunciated: String) -> Result<(), String> {
     let mut guess = get_initial_guess(enunciated.as_str());
     guess.enunciated = enunciated.trim().to_string();
 
+    let tags = select_tags_for(None)?;
     let word = ask_for_word_based_on(enunciated.clone(), guess)?;
+    let Ok(selected_tags) = MultiSelect::new("Tags:", tags)
+        .with_starting_cursor(0)
+        .prompt()
+    else {
+        return Err("abort!".to_string());
+    };
+
     match mihi::create_word(word) {
-        Ok(_) => {
+        Ok(word_id) => {
+            for tag in selected_tags {
+                if let Err(e) = mihi::attach_tag_to_word(tag.id as i64, word_id) {
+                    println!("warning: words: {e}");
+                }
+            }
             println!("Word '{enunciated}' has been successfully created!");
             Ok(())
         }
@@ -522,6 +535,9 @@ fn edit(mut args: IntoIter<String>) -> i32 {
         }
     };
 
+    // Preserve this value as it will be used at the end of this function.
+    let word_id = word.id as i64;
+
     // The enunciate might change, let's ask for it again. This way we get the
     // same experience as with the 'create' command.
     let Ok(enunciated) = Text::new("Enunciated:")
@@ -534,6 +550,22 @@ fn edit(mut args: IntoIter<String>) -> i32 {
         return 0;
     }
 
+    // Select the tags for the current word.
+    let tags = match mihi::select_tags_for(Some(word.id)) {
+        Ok(tags) => tags,
+        Err(e) => {
+            println!("error: words: {e}");
+            return 1;
+        }
+    };
+    let all_tags = match mihi::select_tags_for(None) {
+        Ok(tags) => tags,
+        Err(e) => {
+            println!("error: words: {e}");
+            return 1;
+        }
+    };
+
     // And ask again column by column to check for changes.
     let updated = match ask_for_word_based_on(enunciated.clone(), word) {
         Ok(word) => word,
@@ -543,8 +575,58 @@ fn edit(mut args: IntoIter<String>) -> i32 {
         }
     };
 
+    // Ask for tags. The indeces on the UI do not match the ones on the
+    // DB. Hence, we need to match the IDs from the DB to the ones displayed on
+    // the DB. It's a bit cumbersome but there shouldn't be many tags for this
+    // to become painfully slow.
+    let mut default_indices = vec![];
+    for t in &tags {
+        for (idx, ta) in all_tags.iter().enumerate() {
+            if t.id == ta.id {
+                default_indices.push(idx);
+            }
+        }
+    }
+    let Ok(selected_tags) = MultiSelect::new("Tags:", all_tags)
+        .with_starting_cursor(0)
+        .with_default(&default_indices)
+        .prompt()
+    else {
+        return 1;
+    };
+
+    // Compute which tags to add and which to remove. This is, again, not the
+    // most fun thing to do, but I think it's better/cleaner on the long run
+    // than simply removing all tag associations and then bringing them
+    // back. And as I said before, there shouldn't be too many tags for this to
+    // become too slow.
+    let mut tags_to_add = vec![];
+    let mut tags_to_remove = vec![];
+    for st in &selected_tags {
+        if !tags.iter().any(|et| st.id == et.id) {
+            tags_to_add.push(st.id);
+        }
+    }
+    for et in &tags {
+        if !selected_tags.iter().any(|st| st.id == et.id) {
+            tags_to_remove.push(et.id);
+        }
+    }
+
     match mihi::update_word(updated) {
         Ok(_) => {
+            // Add missing tags.
+            for tag in tags_to_add {
+                if let Err(e) = mihi::attach_tag_to_word(tag as i64, word_id) {
+                    println!("warning: words: {e}");
+                }
+            }
+
+            // Drop tags which are no longer needed.
+            if let Err(e) = mihi::dettach_tags_from_word(&tags_to_remove, word_id) {
+                println!("warning: words: {e}");
+            }
+
             println!("Word '{enunciated}' has been updated!");
             0
         }

@@ -360,6 +360,19 @@ pub fn adverb(word: &Word, related: &[Word]) -> String {
 }
 
 #[derive(Clone, Debug)]
+pub struct Tag {
+    pub id: i32,
+    pub name: String,
+}
+
+// Needed for inquire's (Multi)Select.
+impl std::fmt::Display for Tag {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Word {
     pub id: i32,
     pub enunciated: String,
@@ -516,8 +529,8 @@ pub fn is_valid_word_flag(flag: &str) -> bool {
     BOOLEAN_FLAGS.contains(&flag)
 }
 
-/// Creates the given word into the database.
-pub fn create_word(word: Word) -> Result<(), String> {
+/// Creates the given word into the database and returns its ID on success.
+pub fn create_word(word: Word) -> Result<i64, String> {
     match word.category {
         Category::Noun => match word.declension_id {
             Some(id @ 1..7) => {
@@ -605,11 +618,13 @@ pub fn create_word(word: Word) -> Result<(), String> {
             0
         ],
     ) {
-        Ok(_) => Ok(()),
+        Ok(_) => Ok(conn.last_insert_rowid()),
         Err(e) => Err(format!("could not create '{}': {}", word.enunciated, e)),
     }
 }
 
+/// Update the word that matches the ID on `word` and set it to the new values
+/// contained in the `word` object.
 pub fn update_word(word: Word) -> Result<(), String> {
     if word.id == 0 {
         return Err("invalid word to update; seems it has not been created before".to_string());
@@ -1022,6 +1037,44 @@ pub fn select_tag_names(filter: &Option<String>) -> Result<Vec<String>, String> 
     Ok(res)
 }
 
+/// Select all tags for the given `word`. If None is provided, then all tags
+/// from the database are returned.
+pub fn select_tags_for(word: Option<i32>) -> Result<Vec<Tag>, String> {
+    let conn = get_connection()?;
+
+    let mut stmt;
+    let mut it = match word {
+        Some(id) => {
+            stmt = conn
+                .prepare(
+                    "SELECT t.id, t.name \
+                     FROM tags t \
+                     JOIN tag_associations ta ON t.id = ta.tag_id \
+                     JOIN words w ON w.id = ta.word_id \
+                     WHERE w.id = ?1 \
+                     ORDER BY t.name",
+                )
+                .unwrap();
+            stmt.query([id]).unwrap()
+        }
+        None => {
+            stmt = conn
+                .prepare("SELECT id, name FROM tags ORDER BY name")
+                .unwrap();
+            stmt.query([]).unwrap()
+        }
+    };
+
+    let mut res = vec![];
+    while let Some(row) = it.next().unwrap() {
+        res.push(Tag {
+            id: row.get::<usize, i32>(0).unwrap(),
+            name: row.get::<usize, String>(1).unwrap(),
+        });
+    }
+    Ok(res)
+}
+
 /// Insert into the database the tag identified by the given name.
 pub fn create_tag(name: &str) -> Result<(), String> {
     let conn = get_connection()?;
@@ -1033,6 +1086,45 @@ pub fn create_tag(name: &str) -> Result<(), String> {
     ) {
         Ok(_) => Ok(()),
         Err(e) => Err(format!("could not create '{}': {}", name, e)),
+    }
+}
+
+/// Inserts the pair of IDs into the tag_associations table.
+pub fn attach_tag_to_word(tag_id: i64, word_id: i64) -> Result<(), String> {
+    let conn = get_connection()?;
+
+    match conn.execute(
+        "INSERT INTO tag_associations (tag_id, word_id, updated_at, created_at) \
+         VALUES (?1, ?2, datetime('now'), datetime('now'))",
+        params![tag_id, word_id],
+    ) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("could not attach tag: {e}")),
+    }
+}
+
+/// Inserts the pair of IDs into the tag_associations table.
+pub fn dettach_tags_from_word(tags: &[i32], word_id: i64) -> Result<(), String> {
+    if tags.is_empty() {
+        return Ok(());
+    }
+
+    let conn = get_connection()?;
+
+    match conn.execute(
+        format!(
+            "DELETE FROM tag_associations \
+             WHERE tag_id in ({}) AND word_id = ?1",
+            tags.iter()
+                .map(|t| format!("{}", t))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+        .as_str(),
+        params![word_id],
+    ) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("could not attach tag: {e}")),
     }
 }
 
