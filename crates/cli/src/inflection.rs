@@ -123,7 +123,7 @@ mod tests {
     use mihi::DeclensionTable;
 
     fn get_word(enunciated: &str) -> Word {
-        let words = mihi::select_enunciated(Some(enunciated.to_string())).unwrap();
+        let words = mihi::select_enunciated(Some(enunciated.to_string()), &[]).unwrap();
 
         assert_eq!(words.len(), 1);
 

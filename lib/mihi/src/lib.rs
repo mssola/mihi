@@ -664,23 +664,64 @@ pub fn update_timestamp(enunciated: &str) -> Result<(), String> {
     }
 }
 
-pub fn select_enunciated(filter: Option<String>) -> Result<Vec<String>, String> {
+/// Select words based on the given `filter` for the enunciated column, which
+/// can be further filtered out by providing a set of `tags`. The words selected
+/// must then have any of the given tags provided by this vector, and it will be
+/// ignored if the passed vector is empty.
+pub fn select_enunciated(filter: Option<String>, tags: &[String]) -> Result<Vec<String>, String> {
     let conn = get_connection()?;
 
     let mut stmt;
     let mut it = match filter {
         Some(filter) => {
-            stmt = conn
+            stmt = if tags.is_empty() {
+                conn
                 .prepare(
                     "SELECT enunciated FROM words WHERE enunciated LIKE ('%' || ?1 || '%') ORDER BY enunciated",
                 )
-                .unwrap();
+                    .unwrap()
+            } else {
+                conn.prepare(
+                    format!(
+                        "SELECT w.enunciated \
+                         FROM words w \
+                         JOIN tag_associations ta ON w.id = ta.word_id \
+                         JOIN tags t ON t.id = ta.tag_id \
+                         WHERE w.enunciated LIKE ('%' || ?1 || '%') AND t.name IN ({}) \
+                         ORDER BY w.enunciated",
+                        tags.iter()
+                            .map(|t| format!("'{}'", t))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    )
+                    .as_str(),
+                )
+                .unwrap()
+            };
             stmt.query([filter.as_str()]).unwrap()
         }
         None => {
-            stmt = conn
-                .prepare("SELECT enunciated FROM words ORDER BY enunciated")
-                .unwrap();
+            stmt = if tags.is_empty() {
+                conn.prepare("SELECT enunciated FROM words ORDER BY enunciated")
+                    .unwrap()
+            } else {
+                conn.prepare(
+                    format!(
+                        "SELECT w.enunciated \
+                         FROM words w \
+                         JOIN tag_associations ta ON w.id = ta.word_id \
+                         JOIN tags t ON t.id = ta.tag_id \
+                         WHERE t.name IN ({}) \
+                         ORDER BY w.enunciated",
+                        tags.iter()
+                            .map(|t| format!("'{}'", t))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    )
+                    .as_str(),
+                )
+                .unwrap()
+            };
             stmt.query([]).unwrap()
         }
     };

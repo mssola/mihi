@@ -69,6 +69,7 @@ fn help(msg: Option<&str>) {
 
     println!("Options:");
     println!("   -h, --help\t\tPrint this message.");
+    println!("   -t, --tag <NAME>\tFilter words which match the given tag NAME. Multiple tags can be provided to match words with any of the tags provided. This will only be accounted in the 'ls' command.");
 
     println!("\nSubcommands:");
     println!("   create\t\tCreate a new word.");
@@ -416,7 +417,7 @@ fn create(args: IntoIter<String>) -> i32 {
 
         // Now we try to fetch whether the word already existed, by doing a
         // general search on the database.
-        let mut words = match mihi::select_enunciated(Some(enunciated.clone())) {
+        let mut words = match mihi::select_enunciated(Some(enunciated.clone()), &[]) {
             Ok(words) => words,
             Err(e) => {
                 println!("error: words: {e}");
@@ -455,13 +456,13 @@ fn create(args: IntoIter<String>) -> i32 {
     }
 }
 
-fn ls(mut args: IntoIter<String>) -> i32 {
+fn ls(mut args: IntoIter<String>, tags: &[String]) -> i32 {
     if args.len() > 1 {
         help(Some("error: words: too many filters"));
         return 1;
     }
 
-    let words = match mihi::select_enunciated(args.next()) {
+    let words = match mihi::select_enunciated(args.next(), tags) {
         Ok(words) => words,
         Err(e) => {
             println!("error: words: {e}");
@@ -480,7 +481,7 @@ fn ls(mut args: IntoIter<String>) -> i32 {
 // multiple words match the same search parameter, then the user is asked to
 // select one from a list of candidates.
 fn select_single_word(search: Option<String>) -> Result<String, String> {
-    let words = mihi::select_enunciated(search)?;
+    let words = mihi::select_enunciated(search, &[])?;
 
     match words.len() {
         0 => Err("not found".to_string()),
@@ -784,13 +785,31 @@ pub fn run(args: Vec<String>) {
     }
 
     let mut it = args.into_iter();
+    let mut do_ls = false;
+    let mut tags = vec![];
 
-    match it.next() {
-        Some(first) => match first.as_str() {
+    while let Some(first) = it.next() {
+        match first.as_str() {
             "-h" | "--help" => {
                 help(None);
                 std::process::exit(0);
             }
+            "-t" | "--tag" => match it.next() {
+                Some(t) => {
+                    let name = t.trim().to_string();
+                    if let Ok(results) = mihi::select_tag_names(&Some(name.clone())) {
+                        if results.is_empty() {
+                            println!("warning: words: the tag '{}' does not exist.", name);
+                        } else {
+                            tags.push(name)
+                        }
+                    }
+                }
+                None => {
+                    help(Some("error: words: you have to provide a tag name"));
+                    std::process::exit(1);
+                }
+            },
             "create" => {
                 std::process::exit(create(it));
             }
@@ -798,7 +817,9 @@ pub fn run(args: Vec<String>) {
                 std::process::exit(edit(it));
             }
             "ls" => {
-                std::process::exit(ls(it));
+                // 'ls' cannot be executed directly as it might receive extra
+                // parameters to it.
+                do_ls = true;
             }
             "poke" => {
                 std::process::exit(poke(it));
@@ -815,15 +836,21 @@ pub fn run(args: Vec<String>) {
                 ));
                 std::process::exit(1);
             }
-        },
-        None => {
-            help(Some(
-                "error: words: you need to provide a command"
-                    .to_string()
-                    .as_str(),
-            ));
-            std::process::exit(1);
         }
+    }
+
+    // If 'ls' was asked, do it now as we potentially have all the tags that
+    // were provided by the user. Otherwise, the above loop did not result in a
+    // valid subcommand (it was not even provided).
+    if do_ls {
+        std::process::exit(ls(it, &tags));
+    } else {
+        help(Some(
+            "error: words: you need to provide a command"
+                .to_string()
+                .as_str(),
+        ));
+        std::process::exit(1);
     }
 }
 
