@@ -217,7 +217,11 @@ mod tests {
         );
         assert_noun_table(
             "ovis, ovis",
-            "ovis, ovēs | ovis, ovēs | ovem, ovēs | ovis, ovium | ovī, ovibus | ove, ovibus",
+            "ovis, ovēs | ovis, ovēs | ovem, ovēs/ovīs | ovis, ovium | ovī, ovibus | ove, ovibus",
+        );
+        assert_noun_table(
+            "turris, turris",
+            "turris, turrēs | turris, turrēs | turrem/turrim, turrēs/turrīs | turris, turrium | turrī, turribus | turre/turrī, turribus",
         );
         assert_noun_table(
             "mare, maris",
