@@ -687,17 +687,68 @@ fn humanize_kind(kind: &str) -> &str {
     }
 }
 
-fn show_info(word: Word) -> Result<(), String> {
-    // Title.
-    match word.gender {
-        Gender::None => println!("Word: {} ({})", word.enunciated, word.category),
-        _ => println!(
-            "Word: {} ({} {})",
+fn humanize_flag(s: &String) -> String {
+    match s.as_str() {
+        "deponent" => "deponent",
+        "semideponent" => "semi-deponent",
+        "onlysingular" => "only singular forms",
+        "onlyplural" => "only plural forms",
+        "compsup_prefix" => "comparative and superlative forms require a prefix",
+        "indeclinable" => "indeclinable",
+        "irregularsup" => "irregular superlative",
+        "nopassive" => "no passive forms",
+        "nosupine" => "no supine form",
+        "noperfect" => "no perfect forms",
+        "nogerundive" => "no gerundive",
+        "impersonal" => "impersonal",
+        "impersonalpassive" => "impersonal only on its passive forms",
+        "noimperative" => "no imperative forms",
+        "noinfinitive" => "no infinitive forms",
+        "shortimperative" => "irregular short imperative",
+        "onlythirdpassive" => "only forms on the third person of the passive voice",
+        "notcomparable" => "not comparable",
+        "onlyperfect" => "only perfect forms",
+        "contracted_vocative" => "contracted vocative, as in filī, not filiī*",
+        _ => "",
+    }
+    .to_string()
+}
+
+fn humanize_flags(word: &Word) -> String {
+    let mut flags = vec![];
+
+    if let Some(obj) = word.flags.as_object() {
+        for (key, value) in obj {
+            if value.as_bool().unwrap_or_default() {
+                flags.push(humanize_flag(key));
+            }
+        }
+    }
+
+    flags.join("; ")
+}
+
+fn title_for_word(word: &Word) -> String {
+    let s = match word.gender {
+        Gender::None => format!("{} ({}", word.enunciated, word.category),
+        _ => format!(
+            "{} ({} {}",
             word.enunciated,
             word.gender.abbrev(),
             word.category
         ),
+    };
+
+    let flags = humanize_flags(word);
+    if flags.is_empty() {
+        return format!("{})", s);
     }
+    format!("{}; {})", s, flags)
+}
+
+fn show_info(word: Word) -> Result<(), String> {
+    // Title.
+    println!("Word: {}", title_for_word(&word));
 
     // Conjugation, declension + kind.
     // TODO: to_human
