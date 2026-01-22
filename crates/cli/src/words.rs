@@ -56,6 +56,9 @@ static FLAGS_TEXT: &str = r#"# Write a JSON blob with the following allowed keys
 #     }
 #   }
 # }
+#
+# That is, this word only has singular forms and the accusative one should be
+# '-im' instead of the regular form.
 "#;
 
 // Show the help message.
