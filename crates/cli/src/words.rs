@@ -76,6 +76,7 @@ fn help(msg: Option<&str>) {
 
     println!("\nSubcommands:");
     println!("   create\t\tCreate a new word.");
+    println!("   dup\t\tCreate a word which is an alternative of another one.");
     println!("   edit\t\t\tEdit information from a word.");
     println!("   ls\t\t\tList the words from the database.");
     println!("   poke\t\t\tUpdate the timestamp for a word.");
@@ -512,6 +513,116 @@ fn select_single_word(search: Option<String>) -> Result<String, String> {
     }
 }
 
+fn dup(mut args: IntoIter<String>) -> i32 {
+    if args.len() > 1 {
+        help(Some(
+            "error: words: only one argument. If it's an enunciate, wrap it in double quotes",
+        ));
+        return 1;
+    }
+
+    // To duplicate a word, you need exactly one as a reference.
+    let enunciated = match select_single_word(args.next()) {
+        Ok(word) => word,
+        Err(e) => {
+            println!("error: words: {e}");
+            return 1;
+        }
+    };
+
+    // Fetch the word object for it which will serve as the initial values.
+    let word = match mihi::find_by(enunciated.as_str()) {
+        Ok(word) => word,
+        Err(e) => {
+            println!("error: words: {e}");
+            return 1;
+        }
+    };
+    let source_id = word.id as i64;
+
+    // The enunciate should change, let's ask for it again. This way we get the
+    // same experience as with the 'create' command.
+    let Ok(enunciated) = Text::new("Enunciated:")
+        .with_initial_value(&word.enunciated)
+        .prompt()
+    else {
+        return 1;
+    };
+    let trimmed = enunciated.trim();
+    if trimmed.is_empty() || trimmed == word.enunciated {
+        println!("Nothing to do...");
+        return 1;
+    }
+
+    // Select the tags for the current word.
+    let tags = match mihi::select_tags_for(Some(word.id)) {
+        Ok(tags) => tags,
+        Err(e) => {
+            println!("error: words: {e}");
+            return 1;
+        }
+    };
+    let all_tags = match mihi::select_tags_for(None) {
+        Ok(tags) => tags,
+        Err(e) => {
+            println!("error: words: {e}");
+            return 1;
+        }
+    };
+
+    // And ask again column by column to check for changes.
+    let updated = match ask_for_word_based_on(enunciated.clone(), word) {
+        Ok(word) => word,
+        Err(e) => {
+            println!("error: words: {e}");
+            return 1;
+        }
+    };
+
+    // Ask for tags. The indeces on the UI do not match the ones on the
+    // DB. Hence, we need to match the IDs from the DB to the ones displayed on
+    // the DB. It's a bit cumbersome but there shouldn't be many tags for this
+    // to become painfully slow.
+    let mut default_indices = vec![];
+    for t in &tags {
+        for (idx, ta) in all_tags.iter().enumerate() {
+            if t.id == ta.id {
+                default_indices.push(idx);
+            }
+        }
+    }
+    let Ok(selected_tags) = MultiSelect::new("Tags:", all_tags)
+        .with_starting_cursor(0)
+        .with_default(&default_indices)
+        .prompt()
+    else {
+        return 1;
+    };
+
+    // Create the word, set it as an alternative, and attach the given tags.
+    match mihi::create_word(updated) {
+        Ok(word_id) => {
+            if let Err(e) =
+                mihi::add_word_relationship(source_id, word_id, RelationKind::Alternative)
+            {
+                println!("errors: words: {e}.");
+                return 1;
+            }
+            for tag in selected_tags {
+                if let Err(e) = mihi::attach_tag_to_word(tag.id as i64, word_id) {
+                    println!("warning: words: {e}.");
+                }
+            }
+            println!("Word '{enunciated}' has been successfully created!");
+            0
+        }
+        Err(e) => {
+            println!("error: words: {e}.");
+            1
+        }
+    }
+}
+
 fn edit(mut args: IntoIter<String>) -> i32 {
     if args.len() > 1 {
         help(Some(
@@ -687,8 +798,8 @@ fn humanize_kind(kind: &str) -> &str {
     }
 }
 
-fn humanize_flag(s: &String) -> String {
-    match s.as_str() {
+fn humanize_flag(s: &str) -> String {
+    match s {
         "deponent" => "deponent",
         "semideponent" => "semi-deponent",
         "onlysingular" => "only singular forms",
@@ -948,6 +1059,9 @@ pub fn run(args: Vec<String>) {
             },
             "create" => {
                 std::process::exit(create(it));
+            }
+            "dup" => {
+                std::process::exit(dup(it));
             }
             "edit" => {
                 std::process::exit(edit(it));

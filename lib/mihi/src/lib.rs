@@ -299,6 +299,21 @@ impl TryFrom<isize> for RelationKind {
     }
 }
 
+/// Add a row in `word_relations` so the words identified by `one_id` and
+/// `other_id` are set to have the `kind` relationship.
+pub fn add_word_relationship(one_id: i64, other_id: i64, kind: RelationKind) -> Result<(), String> {
+    let conn = get_connection()?;
+
+    match conn.execute(
+        "INSERT INTO word_relations (source_id, destination_id, kind, updated_at, created_at) \
+         VALUES (?1, ?2, ?3, datetime('now'), datetime('now'))",
+        params![one_id, other_id, kind as isize],
+    ) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 /// Join by enunciate the given words.
 pub fn joint_related_words(related: &[Word]) -> String {
     related
