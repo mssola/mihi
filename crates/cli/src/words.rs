@@ -599,15 +599,25 @@ fn dup(mut args: IntoIter<String>) -> i32 {
         return 1;
     };
 
-    // Create the word, set it as an alternative, and attach the given tags.
+    // Create the word. If successful, then we move into relationships and tags.
     match mihi::create_word(updated) {
         Ok(word_id) => {
+            // Set it as an alternative. This goes both ways, so two
+            // relationships have to be inserted with both directions.
             if let Err(e) =
                 mihi::add_word_relationship(source_id, word_id, RelationKind::Alternative)
             {
                 println!("errors: words: {e}.");
                 return 1;
             }
+            if let Err(e) =
+                mihi::add_word_relationship(word_id, source_id, RelationKind::Alternative)
+            {
+                println!("errors: words: {e}.");
+                return 1;
+            }
+
+            // Attach tags.
             for tag in selected_tags {
                 if let Err(e) = mihi::attach_tag_to_word(tag.id as i64, word_id) {
                     println!("warning: words: {e}.");
