@@ -1010,6 +1010,15 @@ fn rm(mut args: IntoIter<String>) -> i32 {
         }
     };
 
+    // Fetch the word object for it which will serve as the initial values.
+    let word = match mihi::find_by(selection.as_str()) {
+        Ok(word) => word,
+        Err(e) => {
+            println!("error: words: {e}");
+            return 1;
+        }
+    };
+
     let ans = Confirm::new(
         format!("Do you really want to remove '{selection}' from the database?").as_str(),
     )
@@ -1017,7 +1026,7 @@ fn rm(mut args: IntoIter<String>) -> i32 {
     .prompt();
 
     match ans {
-        Ok(true) => match mihi::delete_word(&selection) {
+        Ok(true) => match mihi::delete_word(&word) {
             Ok(_) => println!("Removed '{selection}' from the database!"),
             Err(e) => {
                 println!("error: words: {e}");

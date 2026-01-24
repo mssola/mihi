@@ -1167,15 +1167,43 @@ pub fn update_success(word: &Word, success: isize, steps: isize) -> Result<(), S
     }
 }
 
-pub fn delete_word(enunciated: &String) -> Result<(), String> {
+/// Delete the given word while also removing any relationship with other words
+/// and tags.
+pub fn delete_word(word: &Word) -> Result<(), String> {
     let conn = get_connection()?;
 
+    // Remove the word itself.
+    if let Err(e) = conn.execute(
+        "DELETE FROM words \
+         WHERE id = ?1",
+        params![word.id],
+    ) {
+        return Err(format!("could not remove '{}': {e}", word.enunciated));
+    }
+
+    // Remove any relationships that mention this word.
+    if let Err(e) = conn.execute(
+        "DELETE FROM word_relations \
+         WHERE source_id = ?1 OR destination_id = ?1",
+        params![word.id],
+    ) {
+        return Err(format!(
+            "could not remove relationships from '{}': {e}",
+            word.enunciated
+        ));
+    }
+
+    // Remove any tag relationships with this now defunct word.
     match conn.execute(
-        "DELETE FROM words WHERE enunciated = ?1",
-        params![enunciated.as_str()],
+        "DELETE FROM tag_associations \
+         WHERE word_id = ?1",
+        params![word.id],
     ) {
         Ok(_) => Ok(()),
-        Err(e) => Err(format!("could not remove '{enunciated}': {e}")),
+        Err(e) => Err(format!(
+            "count not detach words for '{}': {e}",
+            word.enunciated
+        )),
     }
 }
 
