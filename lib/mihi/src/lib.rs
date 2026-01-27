@@ -284,6 +284,19 @@ pub enum RelationKind {
     Gendered,
 }
 
+// Needed for inquire's (Multi)Select.
+impl std::fmt::Display for RelationKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Comparative => write!(f, "comparative form"),
+            Self::Superlative => write!(f, "superlative form"),
+            Self::Adverb => write!(f, "adverbial form"),
+            Self::Alternative => write!(f, "alternative word"),
+            Self::Gendered => write!(f, "alternative word because of gender"),
+        }
+    }
+}
+
 impl TryFrom<isize> for RelationKind {
     type Error = String;
 

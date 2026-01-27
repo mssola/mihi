@@ -80,6 +80,7 @@ fn help(msg: Option<&str>) {
     println!("   edit\t\t\tEdit information from a word.");
     println!("   ls\t\t\tList the words from the database.");
     println!("   poke\t\t\tUpdate the timestamp for a word.");
+    println!("   rel\t\t\tEstablish a relationship between two words.");
     println!("   rm\t\t\tRemove a word from the database.");
     println!("   show\t\t\tShow information from a word.");
 }
@@ -964,6 +965,83 @@ fn poke(mut args: IntoIter<String>) -> i32 {
     }
 }
 
+fn rel(args: IntoIter<String>) -> i32 {
+    if args.len() > 0 {
+        help(Some(
+            "error: words: no arguments were expected for this command",
+        ));
+        return 1;
+    }
+
+    println!("The word:");
+    let source_enunciate = match select_single_word(None) {
+        Ok(word) => word,
+        Err(e) => {
+            println!("error: words: {e}.");
+            return 1;
+        }
+    };
+    let source = match mihi::find_by(source_enunciate.as_str()) {
+        Ok(word) => word,
+        Err(e) => {
+            println!("error: words: {e}");
+            return 1;
+        }
+    };
+
+    let kinds = vec![
+        RelationKind::Comparative,
+        RelationKind::Superlative,
+        RelationKind::Adverb,
+        RelationKind::Alternative,
+        RelationKind::Gendered,
+    ];
+    let Ok(relation) = Select::new("has a...", kinds).prompt() else {
+        return 1;
+    };
+
+    println!("which is the word:");
+    let dest_enunciate = match select_single_word(None) {
+        Ok(word) => word,
+        Err(e) => {
+            println!("error: words: {e}.");
+            return 1;
+        }
+    };
+    let dest = match mihi::find_by(dest_enunciate.as_str()) {
+        Ok(word) => word,
+        Err(e) => {
+            println!("error: words: {e}");
+            return 1;
+        }
+    };
+
+    match mihi::add_word_relationship(source.id as i64, dest.id as i64, relation.clone()) {
+        Ok(_) => {
+            // If the relation was actually an alternative word, then the
+            // relationship goes both ways. Add the same relationship but with
+            // the direction changed.
+            if matches!(relation, RelationKind::Alternative | RelationKind::Gendered) {
+                if let Err(e) =
+                    mihi::add_word_relationship(dest.id as i64, source.id as i64, relation.clone())
+                {
+                    println!("errors: words: {e}");
+                    return 1;
+                }
+            }
+            println!(
+                "Success: '{}' has now been marked as '{relation}' to '{}'",
+                dest.enunciated, source.enunciated
+            );
+            0
+        }
+        Err(e) => {
+            println!("errors: words: {e}");
+            1
+        }
+    }
+}
+
 fn show(mut args: IntoIter<String>) -> i32 {
     if args.len() > 1 {
         help(Some(
@@ -1092,6 +1170,9 @@ pub fn run(args: Vec<String>) {
             }
             "poke" => {
                 std::process::exit(poke(it));
+            }
+            "rel" => {
+                std::process::exit(rel(it));
             }
             "rm" => {
                 std::process::exit(rm(it));
