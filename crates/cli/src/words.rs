@@ -868,14 +868,25 @@ fn title_for_word(word: &Word) -> String {
     format!("{}; {})", s, flags)
 }
 
+fn humanize_conjugation(id: isize) -> String {
+    match id {
+        1 => "1st (ā-stems)",
+        2 => "2nd (ē-stems)",
+        3 => "3rd (ĕ-stems)",
+        4 => "3rd (-iō variants)",
+        5 => "4th (ī-stems)",
+        _ => panic!("bad conjugation id {id}"),
+    }
+    .to_string()
+}
+
 fn show_info(word: Word) -> Result<(), String> {
     // Title.
     println!("Word: {}", title_for_word(&word));
 
     // Conjugation, declension + kind.
-    // TODO: to_human
     match word.conjugation_id {
-        Some(id) => println!("Conjugation: {}", id),
+        Some(id) => println!("Conjugation: {}", humanize_conjugation(id)),
         None => {
             if let Some(did) = word.declension_id {
                 if did > 5 {
