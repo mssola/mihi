@@ -101,9 +101,9 @@ pub fn print_full_inflection_for(word: Word) -> Result<(), String> {
     match word.category {
         Category::Noun => print_noun_inflection(&word)?,
         Category::Adjective => print_adjective_inflection(&word)?,
-        Category::Verb => {}    // TODO
-        Category::Pronoun => {} // TODO
-        Category::Adverb
+        Category::Verb
+        | Category::Pronoun
+        | Category::Adverb
         | Category::Preposition
         | Category::Conjunction
         | Category::Interjection
@@ -112,7 +112,6 @@ pub fn print_full_inflection_for(word: Word) -> Result<(), String> {
             // Nothing to do.
         }
     }
-    // TODO: on the 'extra' info.
 
     Ok(())
 }

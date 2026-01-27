@@ -75,9 +75,33 @@ fn run_words(words: &Vec<Word>, locale: &Locale) -> bool {
 
 fn fill_out_enunciated(word: &Word) -> String {
     match word.category {
-        Category::Noun | Category::Adjective => {
+        Category::Noun | Category::Adjective | Category::Pronoun => {
+            // For nouns and adjectives this should be as simple as just showing
+            // the first part of the enunciate, as the "hard" part is to figure
+            // out the second part.
             let en = word.enunciated.split(',').next().unwrap_or("");
             en.to_string()
+        }
+        Category::Verb => {
+            // Split the enunciate and pick at random the index of the one to be
+            // shown.
+            let en: Vec<&str> = word.enunciated.split(',').map(|s| s.trim()).collect();
+            let mut rng = rand::rng();
+            let selection = rng.random_range(0..en.len());
+
+            // And now reconstruct the string by replacing all parts except
+            // 'selection' with '___'.
+            en.iter()
+                .enumerate()
+                .map(|(i, part)| {
+                    if i == selection {
+                        part.to_string()
+                    } else {
+                        "___".to_string()
+                    }
+                })
+                .collect::<Vec<String>>()
+                .join(", ")
         }
         cat => panic!(
             "trying to fill out an enunciated from a non-supported category '{}'",
@@ -289,7 +313,7 @@ fn good_inflection(word: &Word) -> bool {
     match word.category {
         Category::Noun => good_noun_inflection(word),
         Category::Adjective => good_adjective_inflection(word),
-        _ => todo!(),
+        cat => panic!("error: practice: trying to inflect {cat}"),
     }
 }
 
@@ -301,7 +325,7 @@ fn run_inflect_words(words: &Vec<Word>, locale: &Locale) -> bool {
         };
 
         // Enunciate.
-        println!("Inflect this {}:", word.category);
+        println!("Fill out this {}:", word.category);
         println!("Translation: {}.", translation);
 
         // Complete the enunciate.
@@ -329,20 +353,23 @@ fn run_inflect_words(words: &Vec<Word>, locale: &Locale) -> bool {
             println!("\x1b[91m❌\x1b[0m\n");
         }
 
-        // Now ask for inflecting the given word in various ways depending on
-        // the word category.
-        if good_inflection(word) {
-            if word.steps as usize == MAX_STEPS - 1 {
-                let _ = update_success(word, word.succeeded + 1, 0);
+        // We only ask to inflect nouns, adjectives and pronouns.
+        if matches!(word.category, Category::Noun | Category::Adjective) {
+            // Now ask for inflecting the given word in various ways depending on
+            // the word category.
+            if good_inflection(word) {
+                if word.steps as usize == MAX_STEPS - 1 {
+                    let _ = update_success(word, word.succeeded + 1, 0);
+                } else {
+                    let _ = update_success(word, word.succeeded, word.steps + 1);
+                }
+                println!("\x1b[92m✓\x1b[0m\n");
             } else {
-                let _ = update_success(word, word.succeeded, word.steps + 1);
+                if word.succeeded > 0 {
+                    let _ = update_success(word, word.succeeded - 1, 0);
+                }
+                println!("\x1b[91m❌\x1b[0m\n");
             }
-            println!("\x1b[92m✓\x1b[0m\n");
-        } else {
-            if word.succeeded > 0 {
-                let _ = update_success(word, word.succeeded - 1, 0);
-            }
-            println!("\x1b[91m❌\x1b[0m\n");
         }
     }
 
@@ -580,7 +607,7 @@ pub fn run(args: Vec<String>) {
                             format!(
                                 "error: practice: unknown flag value '{flag}'. You have to pick between: {supported}"
                             )
-                            .as_str(),
+                                .as_str(),
                         ));
                         std::process::exit(1);
                     }
@@ -647,13 +674,24 @@ pub fn run(args: Vec<String>) {
         };
 
         if !exercises_only {
-            if let Ok(list) = words {
-                if !inflection_only && !run_words(&list, &locale) {
+            if let Ok(mut list) = words {
+                if inflection_only {
+                    // If the '-i/--inflection' flag is passed, then don't
+                    // discard the current selection, as that might be all of
+                    // them when picking up a short category like pronouns.
+                    list = vec![];
+                } else if !run_words(&list, &locale) {
                     break;
                 }
+
                 let cats = match category {
                     Some(cat) => vec![cat],
-                    None => vec![Category::Noun, Category::Adjective],
+                    None => vec![
+                        Category::Noun,
+                        Category::Adjective,
+                        Category::Verb,
+                        Category::Pronoun,
+                    ],
                 };
                 if let Ok(words_to_inflect) = mihi::select_words_except(&list, &cats, &flags, &tags)
                 {
