@@ -1779,17 +1779,25 @@ pub fn group_declension_inflections(
     let mut table = DeclensionTable::default();
 
     while let Some(row) = it.next().unwrap() {
+        let onlyplural = word.is_flag_set("onlyplural");
+
         // Fetch the number and account for defectives on number.
         let number_i: isize = row.get(1).unwrap();
         let number: usize = usize::try_from(number_i).expect("not expecting a negative number");
-        if (number == 0 && word.is_flag_set("onlyplural"))
-            || (number == 1 && word.is_flag_set("onlysingular"))
-        {
+        if (number == 0 && onlyplural) || (number == 1 && word.is_flag_set("onlysingular")) {
             continue;
         }
 
         let case_i: isize = row.get(3).unwrap();
         let term: String = row.get(4).unwrap();
+
+        // If this is the locative, on the plural, and 'onlyplural' was not
+        // specified, then chances are that the locative in the plural doesn't
+        // exist. That is because it only existed for defective nouns such as
+        // 'Athēnīs'.
+        if case_i == 6 && number == 1 && !onlyplural {
+            continue;
+        }
 
         table.add(
             word,

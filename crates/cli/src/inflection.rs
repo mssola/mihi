@@ -191,6 +191,10 @@ mod tests {
             "Rōma | Rōma | Rōmam | Rōmae | Rōmae | Rōmā | Rōmae",
         );
         assert_noun_table(
+            "Athēnae, Athēnārum",
+            "Athēnae | Athēnae | Athēnās | Athēnārum | Athēnīs | Athēnīs | Athēnīs",
+        );
+        assert_noun_table(
             "lupus, lupī",
             "lupus, lupī | lupe, lupī | lupum, lupōs | lupī, lupōrum | lupō, lupīs | lupō, lupīs",
         );
@@ -238,7 +242,10 @@ mod tests {
             "cornū, cornūs",
             "cornū, cornua | cornū, cornua | cornū, cornua | cornūs, cornuum | cornuī, cornibus | cornū, cornibus",
         );
-        // TODO: domus
+        assert_noun_table(
+            "domus, domūs/domī",
+            "domus, domūs | domus, domūs | domum, domūs/domōs | domūs/domī, domuum/domōrum | domuī/domō/domū, domibus | domū/domō, domibus | domī, ",
+        );
         assert_noun_table(
             "diēs, diēī",
             "diēs, diēs | diēs, diēs | diem, diēs | diēī, diērum | diēī, diēbus | diē, diēbus",
