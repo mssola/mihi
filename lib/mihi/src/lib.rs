@@ -6,6 +6,8 @@ use std::io::prelude::*;
 use std::io::{self, BufRead, BufReader, Error};
 use std::path::{Path, PathBuf};
 
+use rusqlite::types::{FromSql, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
+use rusqlite::Result;
 use rusqlite::{params, Connection};
 
 mod migrate;
@@ -188,6 +190,98 @@ impl std::fmt::Display for Gender {
             Self::MasculineOrFeminine => write!(f, "masculine or feminine"),
             Self::Neuter => write!(f, "neuter"),
             Self::None => write!(f, "none"),
+        }
+    }
+}
+
+/// Identifies the declension for a given word, and it allows to do SQL to/from
+/// conversions.
+#[derive(Clone, Debug)]
+pub enum Declension {
+    First = 1,
+    Second,
+    Third,
+    Fourth,
+    Fifth,
+    Other,
+}
+
+impl ToSql for Declension {
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::from(self.clone() as isize))
+    }
+}
+
+impl FromSql for Declension {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        let val = value.as_i64().unwrap_or(0);
+
+        match val {
+            1 => Ok(Declension::First),
+            2 => Ok(Declension::Second),
+            3 => Ok(Declension::Third),
+            4 => Ok(Declension::Fourth),
+            5 => Ok(Declension::Fifth),
+            _ => Ok(Declension::Other),
+        }
+    }
+}
+
+impl std::fmt::Display for Declension {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Declension::First => write!(f, "1st (-ae)"),
+            Declension::Second => write!(f, "2nd (-ī)"),
+            Declension::Third => write!(f, "3rd (-is)"),
+            Declension::Fourth => write!(f, "4th (-ūs)"),
+            Declension::Fifth => write!(f, "5th (-eī/-ēī)"),
+            Declension::Other => write!(f, "other"),
+        }
+    }
+}
+
+/// Identifies the conjugation for a given verb, and it allows to do SQL to/from
+/// conversions.
+#[derive(Clone, Debug)]
+pub enum Conjugation {
+    First = 1,
+    Second,
+    Third,
+    ThirdIo,
+    Fourth,
+    Other,
+}
+
+impl ToSql for Conjugation {
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::from(self.clone() as isize))
+    }
+}
+
+impl FromSql for Conjugation {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        let val = value.as_i64().unwrap_or(0);
+
+        match val {
+            1 => Ok(Conjugation::First),
+            2 => Ok(Conjugation::Second),
+            3 => Ok(Conjugation::Third),
+            4 => Ok(Conjugation::ThirdIo),
+            5 => Ok(Conjugation::Fourth),
+            _ => Ok(Conjugation::Other),
+        }
+    }
+}
+
+impl std::fmt::Display for Conjugation {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Conjugation::First => write!(f, "1st (ā stems)"),
+            Conjugation::Second => write!(f, "2nd (ē stems)"),
+            Conjugation::Third => write!(f, "3rd (ĕ stems)"),
+            Conjugation::ThirdIo => write!(f, "3rd (-iō variants)"),
+            Conjugation::Fourth => write!(f, "4th (ī stems)"),
+            Conjugation::Other => write!(f, "other"),
         }
     }
 }
@@ -380,9 +474,9 @@ pub fn adverb(word: &Word, related: &[Word]) -> String {
     }
 
     let part = word.real_particle();
-    match word.declension_id {
-        Some(1 | 2) => format!("{part}ē"),
-        Some(3) => format!("{part}iter"),
+    match word.declension {
+        Some(Declension::First | Declension::Second) => format!("{part}ē"),
+        Some(Declension::Third) => format!("{part}iter"),
         _ => "<unknown>".to_string(),
     }
 }
@@ -406,8 +500,8 @@ pub struct Word {
     pub enunciated: String,
     pub particle: String,
     pub language: Language,
-    pub declension_id: Option<isize>,
-    pub conjugation_id: Option<isize>,
+    pub declension: Option<Declension>,
+    pub conjugation: Option<Conjugation>,
     pub kind: String,
     pub category: Category,
     pub regular: bool,
@@ -425,8 +519,8 @@ impl Word {
     pub fn from(
         particle: String,
         category: Category,
-        declension_id: Option<isize>,
-        conjugation_id: Option<isize>,
+        declension: Option<Declension>,
+        conjugation: Option<Conjugation>,
         gender: Gender,
         kind: String,
     ) -> Word {
@@ -435,8 +529,8 @@ impl Word {
             enunciated: "".to_string(),
             particle,
             category,
-            declension_id,
-            conjugation_id,
+            declension,
+            conjugation,
             kind,
             regular: true,
             locative: false,
@@ -449,13 +543,6 @@ impl Word {
             steps: 0,
             weight: 5,
         }
-    }
-
-    pub fn inflection_id(&self) -> Option<isize> {
-        if matches!(self.category, Category::Verb) {
-            return Some(self.conjugation_id.unwrap());
-        }
-        self.declension_id
     }
 
     /// Returns whether the given flag is set to true on this word.
@@ -487,43 +574,6 @@ impl Word {
         self.particle.clone()
     }
 }
-
-const DECLENSIONS_WITH_KINDS: &[&[&str]] = &[
-    &["a"],
-    &["us", "um", "ius", "er/ir"],
-    &[
-        "is",
-        "istem",
-        "pureistem",
-        "one",
-        "onenonistem",
-        "two",
-        "three",
-        "visvis",
-        "sussuis",
-        "bosbovis",
-        "iuppiteriovis",
-    ],
-    &["fus", "domusdomus"],
-    &["ies", "es"],
-    &["indeclinable"],
-];
-
-const ADJECTIVE_KINDS: &[&[&str]] = &[
-    &["us", "er/ir"],
-    &[],
-    &[
-        "one",
-        "onenonistem",
-        "two",
-        "three",
-        "unusnauta",
-        "unusnautaer/ir",
-        "duo",
-        "tres",
-        "mille",
-    ],
-];
 
 /// List of boolean flags supported for words.
 pub const BOOLEAN_FLAGS: &[&str] = &[
@@ -560,55 +610,26 @@ pub fn is_valid_word_flag(flag: &str) -> bool {
 /// Creates the given word into the database and returns its ID on success.
 pub fn create_word(word: Word) -> Result<i64, String> {
     match word.category {
-        Category::Noun => match word.declension_id {
-            Some(id @ 1..7) => {
-                if !DECLENSIONS_WITH_KINDS[id as usize - 1].contains(&word.kind.as_str()) {
-                    return Err(format!("bad kind for declension '{id}'"));
-                }
-            }
-            Some(val) => return Err(format!("the declension ID '{val}' is not valid for nouns")),
-            None => {
+        Category::Noun | Category::Adjective => {
+            if word.declension.is_none() {
                 return Err(String::from(
-                    "you have to provide the declension ID for this noun",
-                ))
+                    "you have to provide the declension for this verb",
+                ));
             }
-        },
-        Category::Adjective => match word.declension_id {
-            Some(id @ (1 | 3)) => {
-                if !ADJECTIVE_KINDS[id as usize - 1].contains(&word.kind.as_str()) {
-                    return Err(format!("bad kind for declension '{id}'"));
-                }
-            }
-            Some(val) => {
-                return Err(format!(
-                    "the declension ID '{val}' is not valid for adjectives"
-                ))
-            }
-            None => {
+        }
+        Category::Verb => {
+            if word.conjugation.is_none() {
                 return Err(String::from(
-                    "you have to provide the declension ID for this adjective",
-                ))
+                    "you have to provide the conjugation for this verb",
+                ));
             }
-        },
-        Category::Verb => match word.conjugation_id {
-            Some(1..6) => {
-                if word.kind.as_str() != "verb" {
-                    return Err("bad kind for verb".to_string());
-                }
-            }
-            Some(val) => return Err(format!("the conjugation ID '{val}' is not valid")),
-            None => {
-                return Err(String::from(
-                    "you have to provide the conjugation ID for this verb",
-                ))
-            }
-        },
+        }
         Category::Adverb
         | Category::Preposition
         | Category::Conjunction
         | Category::Interjection
         | Category::Determiner => {
-            if word.declension_id.is_some() || word.conjugation_id.is_some() {
+            if word.declension.is_some() || word.conjugation.is_some() {
                 return Err(format!("no inflection allowed for '{}'", word.category));
             }
         }
@@ -632,8 +653,8 @@ pub fn create_word(word: Word) -> Result<i64, String> {
             word.enunciated.trim(),
             word.particle.trim(),
             word.language as isize,
-            word.declension_id,
-            word.conjugation_id,
+            word.declension,
+            word.conjugation,
             word.kind.trim(),
             word.category as isize,
             word.regular,
@@ -671,8 +692,8 @@ pub fn update_word(word: Word) -> Result<(), String> {
             word.id,
             word.enunciated,
             word.particle,
-            word.declension_id,
-            word.conjugation_id,
+            word.declension,
+            word.conjugation,
             word.kind,
             word.category as isize,
             word.regular,
@@ -803,8 +824,8 @@ pub fn select_related_words(word: &Word) -> Result<[Vec<Word>; 5], String> {
             enunciated: row.get(1).unwrap(),
             particle: row.get(2).unwrap(),
             language: row.get::<usize, isize>(3).unwrap().try_into()?,
-            declension_id: row.get(4).unwrap(),
-            conjugation_id: row.get(5).unwrap(),
+            declension: row.get(4).unwrap(),
+            conjugation: row.get(5).unwrap(),
             kind: row.get(6).unwrap(),
             category: row.get::<usize, isize>(7).unwrap().try_into()?,
             regular: row.get(8).unwrap(),
@@ -843,8 +864,8 @@ pub fn find_by(enunciated: &str) -> Result<Word, String> {
                 enunciated: row.get(1).unwrap(),
                 particle: row.get(2).unwrap(),
                 language: row.get::<usize, isize>(3).unwrap().try_into()?,
-                declension_id: row.get(4).unwrap(),
-                conjugation_id: row.get(5).unwrap(),
+                declension: row.get(4).unwrap(),
+                conjugation: row.get(5).unwrap(),
                 kind: row.get(6).unwrap(),
                 category: row.get::<usize, isize>(7).unwrap().try_into()?,
                 regular: row.get(8).unwrap(),
@@ -933,8 +954,8 @@ pub fn select_relevant_words(
             enunciated: row.get(1).unwrap(),
             particle: row.get(2).unwrap(),
             language: row.get::<usize, isize>(3).unwrap().try_into()?,
-            declension_id: row.get(4).unwrap(),
-            conjugation_id: row.get(5).unwrap(),
+            declension: row.get(4).unwrap(),
+            conjugation: row.get(5).unwrap(),
             kind: row.get(6).unwrap(),
             category: row.get::<usize, isize>(7).unwrap().try_into()?,
             regular: row.get(8).unwrap(),
@@ -1020,8 +1041,8 @@ pub fn select_words_except(
             enunciated: row.get(1).unwrap(),
             particle: row.get(2).unwrap(),
             language: row.get::<usize, isize>(3).unwrap().try_into()?,
-            declension_id: row.get(4).unwrap(),
-            conjugation_id: row.get(5).unwrap(),
+            declension: row.get(4).unwrap(),
+            conjugation: row.get(5).unwrap(),
             kind: row.get(6).unwrap(),
             category: row.get::<usize, isize>(7).unwrap().try_into()?,
             regular: row.get(8).unwrap(),
@@ -1717,8 +1738,8 @@ pub fn get_adjective_table(word: &Word) -> Result<[DeclensionTable; 3], String> 
     let kind_f = if word.kind.as_str() == "unusnauta" {
         &word.kind
     } else {
-        match word.declension_id {
-            Some(1 | 2) => &"a".to_string(),
+        match word.declension {
+            Some(Declension::First | Declension::Second) => &"a".to_string(),
             _ => &word.kind,
         }
     };

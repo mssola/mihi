@@ -4,7 +4,7 @@ use crate::locale::current_locale;
 use inquire::{Confirm, Editor, MultiSelect, Select, Text};
 use mihi::{
     adverb, comparative, joint_related_words, select_related_words, select_tags_for, superlative,
-    Category, Gender, Language, RelationKind, Word,
+    Category, Conjugation, Declension, Gender, Language, RelationKind, Word,
 };
 use std::vec::IntoIter;
 
@@ -98,7 +98,7 @@ fn get_initial_guess(value: &str) -> Word {
             return Word::from(
                 first[0..first.len() - 1].to_string(),
                 Category::Noun,
-                Some(1),
+                Some(Declension::First),
                 None,
                 Gender::Feminine,
                 "a".to_string(),
@@ -107,7 +107,7 @@ fn get_initial_guess(value: &str) -> Word {
             return Word::from(
                 first[0..first.len() - 2].to_string(),
                 Category::Noun,
-                Some(2),
+                Some(Declension::Second),
                 None,
                 Gender::Masculine,
                 "us".to_string(),
@@ -116,7 +116,7 @@ fn get_initial_guess(value: &str) -> Word {
             return Word::from(
                 first[0..first.len() - 2].to_string(),
                 Category::Noun,
-                Some(2),
+                Some(Declension::Second),
                 None,
                 Gender::Neuter,
                 "um".to_string(),
@@ -125,7 +125,7 @@ fn get_initial_guess(value: &str) -> Word {
             return Word::from(
                 first[0..first.len() - 2].to_string(),
                 Category::Noun,
-                Some(4),
+                Some(Declension::Fourth),
                 None,
                 Gender::Masculine,
                 "fus".to_string(),
@@ -134,7 +134,7 @@ fn get_initial_guess(value: &str) -> Word {
             return Word::from(
                 first[0..first.len() - 1].to_string(),
                 Category::Noun,
-                Some(4),
+                Some(Declension::Fourth),
                 None,
                 Gender::Masculine,
                 "fus".to_string(),
@@ -143,7 +143,7 @@ fn get_initial_guess(value: &str) -> Word {
             return Word::from(
                 first[0..first.len() - 3].to_string(),
                 Category::Noun,
-                Some(5),
+                Some(Declension::Fifth),
                 None,
                 Gender::Masculine,
                 "ies".to_string(),
@@ -152,7 +152,7 @@ fn get_initial_guess(value: &str) -> Word {
             return Word::from(
                 first[0..first.len() - 2].to_string(),
                 Category::Noun,
-                Some(5),
+                Some(Declension::Fifth),
                 None,
                 Gender::Masculine,
                 "es".to_string(),
@@ -161,7 +161,7 @@ fn get_initial_guess(value: &str) -> Word {
             return Word::from(
                 second[0..second.len() - 2].to_string(),
                 Category::Noun,
-                Some(3),
+                Some(Declension::Third),
                 None,
                 Gender::Masculine,
                 "is".to_string(),
@@ -205,6 +205,62 @@ fn get_translated<'a>(word: &'a Word, key: &'a str) -> Result<&'a String, String
         },
         None => Err("key does not exist".to_string()),
     }
+}
+
+fn prompt_declension(cat: &Category, declension: Declension) -> Result<Declension, String> {
+    let options;
+    let idx;
+
+    match cat {
+        Category::Noun => {
+            options = vec![
+                Declension::First,
+                Declension::Second,
+                Declension::Third,
+                Declension::Fourth,
+                Declension::Fifth,
+            ];
+            idx = declension as usize - 1;
+        }
+        Category::Adjective => {
+            options = vec![Declension::First, Declension::Third];
+            idx = if matches!(declension, Declension::Third) {
+                1
+            } else {
+                0
+            };
+        }
+        _ => panic!("bad parameter"),
+    }
+
+    let Ok(result) = Select::new("Declension:", options)
+        .with_starting_cursor(idx)
+        .prompt()
+    else {
+        return Err("abort!".to_string());
+    };
+
+    Ok(result)
+}
+
+fn prompt_conjugation(conjugation: Conjugation) -> Result<Conjugation, String> {
+    let options = vec![
+        Conjugation::First,
+        Conjugation::Second,
+        Conjugation::Third,
+        Conjugation::ThirdIo,
+        Conjugation::Fourth,
+    ];
+    let idx = conjugation as usize - 1;
+
+    let Ok(result) = Select::new("Conjugation:", options)
+        .with_starting_cursor(idx)
+        .prompt()
+    else {
+        return Err("abort!".to_string());
+    };
+
+    Ok(result)
 }
 
 // Interactively ask the user to provide information for a word by the given
@@ -257,29 +313,68 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
         _ => Gender::None,
     };
 
-    let inflection_id = match category {
-        Category::Noun | Category::Adjective | Category::Verb => {
-            let Ok(inflection) = Text::new("Inflection:")
-                .with_initial_value(word.inflection_id().unwrap_or(0).to_string().as_str())
-                .prompt()
-            else {
-                return Err("abort!".to_string());
-            };
-            let Ok(inflection_id) = inflection.parse::<isize>() else {
-                return Err(format!("bad value for inflection ID '{inflection}'"));
-            };
-            Some(inflection_id)
-        }
-        _ => None,
-    };
-
-    // TODO: refine guess once the inflection is known: select from possible values.
-    let kind = match category {
+    let declension;
+    let conjugation;
+    match category {
         Category::Noun | Category::Adjective => {
-            let Ok(kind) = Text::new("Kind:").with_initial_value(&word.kind).prompt() else {
-                return Err("abort!".to_string());
+            declension = Some(prompt_declension(
+                &category,
+                word.declension.clone().unwrap_or(Declension::First),
+            )?);
+            conjugation = None;
+        }
+        Category::Verb => {
+            declension = None;
+            conjugation = Some(prompt_conjugation(
+                word.conjugation.clone().unwrap_or(Conjugation::First),
+            )?);
+        }
+        _ => {
+            declension = None;
+            conjugation = None;
+        }
+    }
+
+    let kind = match category {
+        Category::Noun => {
+            let options = match declension {
+                Some(Declension::First) => vec!["a"],
+                Some(Declension::Second) => vec!["us", "um", "ius", "er/ir"],
+                Some(Declension::Third) => vec![
+                    "is",
+                    "istem",
+                    "pureistem",
+                    "one",
+                    "onenonistem",
+                    "two",
+                    "three",
+                    "visvis",
+                    "sussuis",
+                    "bosbovis",
+                    "iuppiteriovis",
+                ],
+                Some(Declension::Fourth) => vec!["fus"],
+                Some(Declension::Fifth) => vec!["ies", "es"],
+                _ => panic!("shouldn't be here :D"),
             };
-            kind.trim().to_string()
+            if options.len() == 1 {
+                options.first().unwrap().to_string()
+            } else {
+                match Select::new("Kind:", options).prompt() {
+                    Ok(kind) => kind.to_string(),
+                    Err(_) => return Err("abort!".to_string()),
+                }
+            }
+        }
+        Category::Adjective => {
+            let options = match declension {
+                Some(Declension::First) => vec!["us", "er/ir"],
+                _ => vec!["one", "onenonistem", "two", "three"],
+            };
+            match Select::new("Kind:", options).prompt() {
+                Ok(kind) => kind.to_string(),
+                Err(_) => return Err("abort!".to_string()),
+            }
         }
         Category::Verb => String::from("verb"),
         _ => String::from("-"),
@@ -316,10 +411,7 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
         return Err("abort!".to_string());
     };
     let Ok(weight) = raw_weight.parse::<isize>() else {
-        return Err(format!(
-            "bad value for inflection ID '{}'",
-            inflection_id.unwrap_or(0)
-        ));
+        return Err("bad value".to_string());
     };
     if weight > 10 {
         return Err(format!(
@@ -355,13 +447,13 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
         enunciated,
         particle,
         language: Language::Latin,
-        declension_id: if matches!(category, Category::Verb) {
+        declension: if matches!(category, Category::Verb) {
             None
         } else {
-            inflection_id
+            declension
         },
-        conjugation_id: if matches!(category, Category::Verb) {
-            inflection_id
+        conjugation: if matches!(category, Category::Verb) {
+            conjugation
         } else {
             None
         },
@@ -762,50 +854,52 @@ fn edit(mut args: IntoIter<String>) -> i32 {
     }
 }
 
-// Returns a string with a more human-readable declension kind.
-fn humanize_kind(kind: &str) -> &str {
+// Returns a string with a more human-readable declension kind. If the kind is
+// self-explanatory, then None is returned (e.g. "a" is the only kind for the
+// first declension, so it's redundant).
+fn humanize_kind(kind: &str) -> Option<&str> {
     match kind {
         // Noun
-        "a" => "-a",
-        "us" => "-us",
-        "er/ir" => "-er/-ir",
-        "um" => "-um",
-        "ius" => "-ius; like 'fīlius'",
-        "is" => "-is",
-        "istem" => "i-stem; '-i-' also in the genitive plural",
-        "pureistem" => "pure i-stem; '-i-' also in the ablative singular",
-        "visvis" => "irregular 'vīs, vīs'",
-        "sussuis" => "irregular 'sūs, suis'",
-        "bosbovis" => "irregular 'bōs, bovis'",
-        "iuppiteriovis" => "irregular 'Iuppiter, Iovis'",
-        "fus" => "-u-",
-        "domusdomus" => "irregular 'domus, domūs/domī'",
-        "ies" => "-iēs; like 'diēs, diēī'",
-        "es" => "-ēs; like 'rēs, reī'",
-        "indeclinable" => "indeclinable",
+        "a" => None,
+        "us" => Some("regular -us"),
+        "er/ir" => Some("-er/-ir"),
+        "um" => Some("neuter -um"),
+        "ius" => Some("-ius; like 'fīlius'"),
+        "is" => Some("regular -is"),
+        "istem" => Some("i-stem; '-i-' also in the genitive plural"),
+        "pureistem" => Some("pure i-stem; '-i-' also in the ablative singular"),
+        "visvis" => Some("irregular 'vīs, vīs'"),
+        "sussuis" => Some("irregular 'sūs, suis'"),
+        "bosbovis" => Some("irregular 'bōs, bovis'"),
+        "iuppiteriovis" => Some("irregular 'Iuppiter, Iovis'"),
+        "fus" => None,
+        "domusdomus" => Some("irregular 'domus, domūs/domī'"),
+        "ies" => Some("-iēs; like 'diēs, diēī'"),
+        "es" => Some("-ēs; like 'rēs, reī'"),
+        "indeclinable" => Some("indeclinable"),
 
         // Adjective
-        "one" => "one termination adjective",
-        "onenonistem" => "one termination adjective; non i-stem like 'melior, melius'",
-        "two" => "two termination adjective",
-        "three" => "three termination adjective",
-        "unusnauta" => "'ūnus nauta' like 'ūnus, ūna, ūnum'",
-        "unusnautaer/ir" => "'ūnus nauta' like 'neuter, neutra, neutrum'",
-        "duo" => "number 'duo, duae, duo'",
-        "tres" => "number 'trēs, trēs, tria'",
-        "mille" => "number 'mīlle, mīlle'",
+        "one" => Some("one termination adjective"),
+        "onenonistem" => Some("one termination adjective; non i-stem like 'melior, melius'"),
+        "two" => Some("two termination adjective"),
+        "three" => Some("three termination adjective"),
+        "unusnauta" => Some("'ūnus nauta' like 'ūnus, ūna, ūnum'"),
+        "unusnautaer/ir" => Some("'ūnus nauta' like 'neuter, neutra, neutrum'"),
+        "duo" => Some("number 'duo, duae, duo'"),
+        "tres" => Some("number 'trēs, trēs, tria'"),
+        "mille" => Some("number 'mīlle, mīlle'"),
 
         // Others
-        "egonos" => "'ego, nōs'",
-        "demonstrative-weak" => "weak demonstrative",
-        "demonstrative-proximal" => "proximal demonstrative",
-        "demonstrative-distal" => "distal demonstrative",
-        "demonstrative-medial" => "medial demonstrative",
-        "demonstrative-idem" => "'īdem, eadem, idem' demonstrative",
-        "tuvos" => "'tū, vōs'",
-        "sesui" => "'sē, suī'",
+        "egonos" => Some("'ego, nōs'"),
+        "demonstrative-weak" => Some("weak demonstrative"),
+        "demonstrative-proximal" => Some("proximal demonstrative"),
+        "demonstrative-distal" => Some("distal demonstrative"),
+        "demonstrative-medial" => Some("medial demonstrative"),
+        "demonstrative-idem" => Some("'īdem, eadem, idem' demonstrative"),
+        "tuvos" => Some("'tū, vōs'"),
+        "sesui" => Some("'sē, suī'"),
 
-        _ => kind,
+        _ => Some(kind),
     }
 }
 
@@ -868,35 +962,22 @@ fn title_for_word(word: &Word) -> String {
     format!("{}; {})", s, flags)
 }
 
-fn humanize_conjugation(id: isize) -> String {
-    match id {
-        1 => "1st (ā-stems)",
-        2 => "2nd (ē-stems)",
-        3 => "3rd (ĕ-stems)",
-        4 => "3rd (-iō variants)",
-        5 => "4th (ī-stems)",
-        _ => panic!("bad conjugation id {id}"),
-    }
-    .to_string()
-}
-
 fn show_info(word: Word) -> Result<(), String> {
     // Title.
     println!("Word: {}", title_for_word(&word));
 
     // Conjugation, declension + kind.
-    match word.conjugation_id {
-        Some(id) => println!("Conjugation: {}", humanize_conjugation(id)),
+    match word.conjugation {
+        Some(ref conjugation) => println!("Conjugation: {}", conjugation),
         None => {
-            if let Some(did) = word.declension_id {
-                if did > 5 {
-                    println!("Declension: {}", humanize_kind(&word.kind));
+            if let Some(ref d) = word.declension {
+                if matches!(d, Declension::Other) {
+                    println!("Declension: {}.", humanize_kind(&word.kind).unwrap_or("-"));
                 } else {
-                    println!(
-                        "Declension: {} ({})",
-                        word.declension_id.unwrap(),
-                        humanize_kind(&word.kind)
-                    );
+                    match humanize_kind(&word.kind) {
+                        Some(k) => println!("Declension: {}; kind: {}.", d, k),
+                        None => println!("Declension: {}", d),
+                    }
                 }
             }
         }
