@@ -198,6 +198,8 @@ pub enum Declension {
     Third,
     Fourth,
     Fifth,
+
+    // Used for highly irregular words (e.g. 'īnstar').
     Other,
 }
 

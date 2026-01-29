@@ -218,6 +218,7 @@ fn prompt_declension(cat: &Category, declension: Declension) -> Result<Declensio
                 Declension::Third,
                 Declension::Fourth,
                 Declension::Fifth,
+                Declension::Other,
             ];
             idx = declension as usize - 1;
         }
@@ -355,6 +356,11 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
                 ],
                 Some(Declension::Fourth) => vec!["fus"],
                 Some(Declension::Fifth) => vec!["ies", "es"],
+                // NOTE: for the 'other' declension we only allow to enter
+                // 'indeclinable' words, as that's the only thing that can be
+                // added from now on (e.g. things like 'ego' have been manually
+                // inserted).
+                Some(Declension::Other) => vec!["indeclinable"],
                 _ => panic!("shouldn't be here :D"),
             };
             if options.len() == 1 {
