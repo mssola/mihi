@@ -1,5 +1,5 @@
 use inquire::{Confirm, Select};
-use mihi::{create_tag, delete_tag, select_tag_names};
+use mihi::tag::{create_tag, delete_tag, select_tag_names};
 use std::vec::IntoIter;
 
 // Show the help message.

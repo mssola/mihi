@@ -1,9 +1,13 @@
 extern crate rand;
 use inquire::{Confirm, Editor, Text};
-use mihi::{configuration, get_adjective_table, get_inflected_from, select_related_words};
-use mihi::{
-    get_noun_table, select_relevant_words, touch_exercise, update_success, Category,
-    DeclensionTable, Exercise, ExerciseKind, RelationKind, Word,
+use mihi::cfg::configuration;
+use mihi::exercise::{select_relevant_exercises, touch_exercise, Exercise, ExerciseKind};
+use mihi::inflection::{get_adjective_table, get_inflected_from, get_noun_table, DeclensionTable};
+use mihi::tag::{select_tag_names, update_success};
+use mihi::word::{
+    adverb, comparative, is_valid_word_flag, joint_related_words, select_related_words,
+    select_relevant_words, select_words_except, superlative, Category, RelationKind, Word,
+    BOOLEAN_FLAGS,
 };
 use rand::prelude::*;
 use std::env;
@@ -218,7 +222,7 @@ fn ask_for_alternatives(related: &[Vec<Word>; 5]) -> bool {
         else {
             return false;
         };
-        let expected = mihi::joint_related_words(alternatives);
+        let expected = joint_related_words(alternatives);
         if !same_answer(&raw, &expected) {
             return false;
         }
@@ -230,7 +234,7 @@ fn ask_for_alternatives(related: &[Vec<Word>; 5]) -> bool {
         else {
             return false;
         };
-        let expected = mihi::joint_related_words(gendered);
+        let expected = joint_related_words(gendered);
         if !same_answer(&raw, &expected) {
             return false;
         }
@@ -246,7 +250,7 @@ fn ask_for_alternatives(related: &[Vec<Word>; 5]) -> bool {
 fn ask_for_others(word: &Word, related: &[Vec<Word>; 5]) -> bool {
     assert!(matches!(word.category, Category::Adjective));
 
-    let comparative = mihi::comparative(word, &related[RelationKind::Comparative as usize - 1]);
+    let comparative = comparative(word, &related[RelationKind::Comparative as usize - 1]);
     let Ok(raw) = Text::new("Comparative:").prompt() else {
         return false;
     };
@@ -254,7 +258,7 @@ fn ask_for_others(word: &Word, related: &[Vec<Word>; 5]) -> bool {
         return false;
     }
 
-    let superlative = mihi::superlative(word, &related[RelationKind::Superlative as usize - 1]);
+    let superlative = superlative(word, &related[RelationKind::Superlative as usize - 1]);
     let Ok(raw) = Text::new("Superlative:").prompt() else {
         return false;
     };
@@ -262,7 +266,7 @@ fn ask_for_others(word: &Word, related: &[Vec<Word>; 5]) -> bool {
         return false;
     }
 
-    let adverbial = mihi::adverb(word, &related[RelationKind::Adverb as usize - 1]);
+    let adverbial = adverb(word, &related[RelationKind::Adverb as usize - 1]);
     let Ok(raw) = Text::new("Adverb:").prompt() else {
         return false;
     };
@@ -593,7 +597,7 @@ pub fn run(args: Vec<String>) {
             }
             "-f" | "--flag" => match it.next() {
                 Some(flag) => {
-                    if mihi::is_valid_word_flag(flag.as_str()) {
+                    if is_valid_word_flag(flag.as_str()) {
                         if flags.iter().any(|s| s.as_str() == flag) {
                             println!(
                                 "warning: practice: flag '{flag}' was provided multiple times"
@@ -602,7 +606,7 @@ pub fn run(args: Vec<String>) {
                             flags.push(flag);
                         }
                     } else {
-                        let supported = mihi::BOOLEAN_FLAGS.join(", ");
+                        let supported = BOOLEAN_FLAGS.join(", ");
                         help(Some(
                             format!(
                                 "error: practice: unknown flag value '{flag}'. You have to pick between: {supported}"
@@ -642,7 +646,7 @@ pub fn run(args: Vec<String>) {
             "-t" | "--tag" => match it.next() {
                 Some(t) => {
                     let name = t.trim().to_string();
-                    if let Ok(results) = mihi::select_tag_names(&Some(name.clone())) {
+                    if let Ok(results) = select_tag_names(&Some(name.clone())) {
                         if results.is_empty() {
                             println!("warning: practice: the tag '{}' does not exist.", name);
                         } else {
@@ -693,8 +697,7 @@ pub fn run(args: Vec<String>) {
                         Category::Pronoun,
                     ],
                 };
-                if let Ok(words_to_inflect) = mihi::select_words_except(&list, &cats, &flags, &tags)
-                {
+                if let Ok(words_to_inflect) = select_words_except(&list, &cats, &flags, &tags) {
                     if !run_inflect_words(&words_to_inflect, &locale) {
                         break;
                     }
@@ -704,7 +707,7 @@ pub fn run(args: Vec<String>) {
 
         if !inflection_only {
             if let Ok(exercises) =
-                mihi::select_relevant_exercises(kind, if exercises_only { 5 } else { 1 })
+                select_relevant_exercises(kind, if exercises_only { 5 } else { 1 })
             {
                 if !run_exercises(exercises) {
                     break;

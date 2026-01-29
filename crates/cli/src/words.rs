@@ -2,10 +2,9 @@ use crate::inflection::print_full_inflection_for;
 use crate::locale::current_locale;
 
 use inquire::{Confirm, Editor, MultiSelect, Select, Text};
-use mihi::{
-    adverb, comparative, joint_related_words, select_related_words, select_tags_for, superlative,
-    Category, Conjugation, Declension, Gender, Language, RelationKind, Word,
-};
+use mihi::cfg::Language;
+use mihi::tag::{attach_tag_to_word, dettach_tags_from_word, select_tag_names, select_tags_for};
+use mihi::word::*;
 use std::vec::IntoIter;
 
 static NEW_MESSAGE: &str = "New word";
@@ -508,10 +507,10 @@ fn do_create(enunciated: String) -> Result<(), String> {
         return Err("abort!".to_string());
     };
 
-    match mihi::create_word(word) {
+    match create_word(word) {
         Ok(word_id) => {
             for tag in selected_tags {
-                if let Err(e) = mihi::attach_tag_to_word(tag.id as i64, word_id) {
+                if let Err(e) = attach_tag_to_word(tag.id as i64, word_id) {
                     println!("warning: words: {e}");
                 }
             }
@@ -541,7 +540,7 @@ fn create(args: IntoIter<String>) -> i32 {
 
         // Now we try to fetch whether the word already existed, by doing a
         // general search on the database.
-        let mut words = match mihi::select_enunciated(Some(enunciated.clone()), &[]) {
+        let mut words = match select_enunciated(Some(enunciated.clone()), &[]) {
             Ok(words) => words,
             Err(e) => {
                 println!("error: words: {e}");
@@ -586,7 +585,7 @@ fn ls(mut args: IntoIter<String>, tags: &[String]) -> i32 {
         return 1;
     }
 
-    let words = match mihi::select_enunciated(args.next(), tags) {
+    let words = match select_enunciated(args.next(), tags) {
         Ok(words) => words,
         Err(e) => {
             println!("error: words: {e}");
@@ -605,7 +604,7 @@ fn ls(mut args: IntoIter<String>, tags: &[String]) -> i32 {
 // multiple words match the same search parameter, then the user is asked to
 // select one from a list of candidates.
 fn select_single_word(search: Option<String>) -> Result<String, String> {
-    let words = mihi::select_enunciated(search, &[])?;
+    let words = select_enunciated(search, &[])?;
 
     match words.len() {
         0 => Err("not found".to_string()),
@@ -638,7 +637,7 @@ fn dup(mut args: IntoIter<String>) -> i32 {
     };
 
     // Fetch the word object for it which will serve as the initial values.
-    let word = match mihi::find_by(enunciated.as_str()) {
+    let word = match find_by(enunciated.as_str()) {
         Ok(word) => word,
         Err(e) => {
             println!("error: words: {e}");
@@ -662,14 +661,14 @@ fn dup(mut args: IntoIter<String>) -> i32 {
     }
 
     // Select the tags for the current word.
-    let tags = match mihi::select_tags_for(Some(word.id)) {
+    let tags = match select_tags_for(Some(word.id)) {
         Ok(tags) => tags,
         Err(e) => {
             println!("error: words: {e}");
             return 1;
         }
     };
-    let all_tags = match mihi::select_tags_for(None) {
+    let all_tags = match select_tags_for(None) {
         Ok(tags) => tags,
         Err(e) => {
             println!("error: words: {e}");
@@ -707,26 +706,22 @@ fn dup(mut args: IntoIter<String>) -> i32 {
     };
 
     // Create the word. If successful, then we move into relationships and tags.
-    match mihi::create_word(updated) {
+    match create_word(updated) {
         Ok(word_id) => {
             // Set it as an alternative. This goes both ways, so two
             // relationships have to be inserted with both directions.
-            if let Err(e) =
-                mihi::add_word_relationship(source_id, word_id, RelationKind::Alternative)
-            {
+            if let Err(e) = add_word_relationship(source_id, word_id, RelationKind::Alternative) {
                 println!("errors: words: {e}.");
                 return 1;
             }
-            if let Err(e) =
-                mihi::add_word_relationship(word_id, source_id, RelationKind::Alternative)
-            {
+            if let Err(e) = add_word_relationship(word_id, source_id, RelationKind::Alternative) {
                 println!("errors: words: {e}.");
                 return 1;
             }
 
             // Attach tags.
             for tag in selected_tags {
-                if let Err(e) = mihi::attach_tag_to_word(tag.id as i64, word_id) {
+                if let Err(e) = attach_tag_to_word(tag.id as i64, word_id) {
                     println!("warning: words: {e}.");
                 }
             }
@@ -758,7 +753,7 @@ fn edit(mut args: IntoIter<String>) -> i32 {
     };
 
     // Fetch the word object for it which will serve as the initial values.
-    let word = match mihi::find_by(enunciated.as_str()) {
+    let word = match find_by(enunciated.as_str()) {
         Ok(word) => word,
         Err(e) => {
             println!("error: words: {e}");
@@ -782,14 +777,14 @@ fn edit(mut args: IntoIter<String>) -> i32 {
     }
 
     // Select the tags for the current word.
-    let tags = match mihi::select_tags_for(Some(word.id)) {
+    let tags = match select_tags_for(Some(word.id)) {
         Ok(tags) => tags,
         Err(e) => {
             println!("error: words: {e}");
             return 1;
         }
     };
-    let all_tags = match mihi::select_tags_for(None) {
+    let all_tags = match select_tags_for(None) {
         Ok(tags) => tags,
         Err(e) => {
             println!("error: words: {e}");
@@ -844,17 +839,17 @@ fn edit(mut args: IntoIter<String>) -> i32 {
         }
     }
 
-    match mihi::update_word(updated) {
+    match update_word(updated) {
         Ok(_) => {
             // Add missing tags.
             for tag in tags_to_add {
-                if let Err(e) = mihi::attach_tag_to_word(tag as i64, word_id) {
+                if let Err(e) = attach_tag_to_word(tag as i64, word_id) {
                     println!("warning: words: {e}");
                 }
             }
 
             // Drop tags which are no longer needed.
-            if let Err(e) = mihi::dettach_tags_from_word(&tags_to_remove, word_id) {
+            if let Err(e) = dettach_tags_from_word(&tags_to_remove, word_id) {
                 println!("warning: words: {e}");
             }
 
@@ -1066,7 +1061,7 @@ fn poke(mut args: IntoIter<String>) -> i32 {
         }
     };
 
-    if mihi::update_timestamp(enunciated.as_str()).is_ok() {
+    if update_timestamp(enunciated.as_str()).is_ok() {
         0
     } else {
         1
@@ -1089,7 +1084,7 @@ fn rel(args: IntoIter<String>) -> i32 {
             return 1;
         }
     };
-    let source = match mihi::find_by(source_enunciate.as_str()) {
+    let source = match find_by(source_enunciate.as_str()) {
         Ok(word) => word,
         Err(e) => {
             println!("error: words: {e}");
@@ -1116,7 +1111,7 @@ fn rel(args: IntoIter<String>) -> i32 {
             return 1;
         }
     };
-    let dest = match mihi::find_by(dest_enunciate.as_str()) {
+    let dest = match find_by(dest_enunciate.as_str()) {
         Ok(word) => word,
         Err(e) => {
             println!("error: words: {e}");
@@ -1124,14 +1119,14 @@ fn rel(args: IntoIter<String>) -> i32 {
         }
     };
 
-    match mihi::add_word_relationship(source.id as i64, dest.id as i64, relation.clone()) {
+    match add_word_relationship(source.id as i64, dest.id as i64, relation.clone()) {
         Ok(_) => {
             // If the relation was actually an alternative word, then the
             // relationship goes both ways. Add the same relationship but with
             // the direction changed.
             if matches!(relation, RelationKind::Alternative | RelationKind::Gendered) {
                 if let Err(e) =
-                    mihi::add_word_relationship(dest.id as i64, source.id as i64, relation.clone())
+                    add_word_relationship(dest.id as i64, source.id as i64, relation.clone())
                 {
                     println!("errors: words: {e}");
                     return 1;
@@ -1166,7 +1161,7 @@ fn show(mut args: IntoIter<String>) -> i32 {
         }
     };
 
-    let word = match mihi::find_by(enunciated.as_str()) {
+    let word = match find_by(enunciated.as_str()) {
         Ok(word) => word,
         Err(e) => {
             println!("error: words: {e}.");
@@ -1197,7 +1192,7 @@ fn rm(mut args: IntoIter<String>) -> i32 {
     };
 
     // Fetch the word object for it which will serve as the initial values.
-    let word = match mihi::find_by(selection.as_str()) {
+    let word = match find_by(selection.as_str()) {
         Ok(word) => word,
         Err(e) => {
             println!("error: words: {e}");
@@ -1212,7 +1207,7 @@ fn rm(mut args: IntoIter<String>) -> i32 {
     .prompt();
 
     match ans {
-        Ok(true) => match mihi::delete_word(&word) {
+        Ok(true) => match delete_word(&word) {
             Ok(_) => println!("Removed '{selection}' from the database!"),
             Err(e) => {
                 println!("error: words: {e}");
@@ -1249,7 +1244,7 @@ pub fn run(args: Vec<String>) {
             "-t" | "--tag" => match it.next() {
                 Some(t) => {
                     let name = t.trim().to_string();
-                    if let Ok(results) = mihi::select_tag_names(&Some(name.clone())) {
+                    if let Ok(results) = select_tag_names(&Some(name.clone())) {
                         if results.is_empty() {
                             println!("warning: words: the tag '{}' does not exist.", name);
                         } else {
@@ -1319,7 +1314,7 @@ mod tests {
     // Returns a string with the format "{comparative form}-{superlative
     // form}-{adverbial form}-{alternatives}-{gendered alternatives}".
     fn related_for(enunciated: &str) -> String {
-        let word = mihi::find_by(enunciated).unwrap();
+        let word = find_by(enunciated).unwrap();
         let related = select_related_words(&word).unwrap();
         let alternatives = &related[RelationKind::Alternative as usize - 1];
         let gendered = &related[RelationKind::Gendered as usize - 1];
@@ -1338,8 +1333,8 @@ mod tests {
         format!(
             "{}-{}-{}",
             first,
-            mihi::joint_related_words(alternatives),
-            mihi::joint_related_words(gendered)
+            joint_related_words(alternatives),
+            joint_related_words(gendered)
         )
     }
 

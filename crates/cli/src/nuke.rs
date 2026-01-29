@@ -20,7 +20,7 @@ pub fn run(args: Vec<String>) {
         }
     }
 
-    match mihi::get_config_path() {
+    match mihi::cfg::get_config_path() {
         Ok(path) => match std::fs::remove_dir_all(path) {
             Ok(_) => {}
             Err(e) => {

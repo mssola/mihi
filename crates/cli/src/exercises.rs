@@ -1,5 +1,8 @@
 use inquire::{Confirm, Editor, Select, Text};
-use mihi::{Exercise, ExerciseKind};
+use mihi::exercise::{
+    create_exercise, delete_exercise, find_exercise_by_title, select_by_title, update_exercise,
+    Exercise, ExerciseKind,
+};
 use std::vec::IntoIter;
 
 // Show the help message.
@@ -107,7 +110,7 @@ fn create(args: IntoIter<String>) -> i32 {
     };
 
     let title = exercise.title.clone();
-    match mihi::create_exercise(exercise) {
+    match create_exercise(exercise) {
         Ok(_) => {
             println!("Exercise '{title}' has been successfully created!");
             0
@@ -120,7 +123,7 @@ fn create(args: IntoIter<String>) -> i32 {
 }
 
 fn select_single_exercise(search: Option<String>) -> Result<Exercise, String> {
-    let exercises = mihi::select_by_title(search)?;
+    let exercises = select_by_title(search)?;
 
     let title = match exercises.len() {
         0 => return Err("not found".to_string()),
@@ -134,7 +137,7 @@ fn select_single_exercise(search: Option<String>) -> Result<Exercise, String> {
         },
     };
 
-    mihi::find_exercise_by_title(title.as_str())
+    find_exercise_by_title(title.as_str())
 }
 
 fn edit(mut args: IntoIter<String>) -> i32 {
@@ -160,7 +163,7 @@ fn edit(mut args: IntoIter<String>) -> i32 {
     };
 
     let title = exercise.title.clone();
-    match mihi::update_exercise(exercise) {
+    match update_exercise(exercise) {
         Ok(_) => {
             println!("Exercise '{title}' has been successfully updated!");
             0
@@ -178,7 +181,7 @@ fn ls(mut args: IntoIter<String>) -> i32 {
         return 1;
     }
 
-    let exercises = mihi::select_by_title(args.next()).unwrap_or(vec![]);
+    let exercises = select_by_title(args.next()).unwrap_or(vec![]);
     for exe in exercises {
         println!("- '{}'", exe);
     }
@@ -208,7 +211,7 @@ fn rm(mut args: IntoIter<String>) -> i32 {
     .prompt();
 
     match ans {
-        Ok(true) => match mihi::delete_exercise(selection) {
+        Ok(true) => match delete_exercise(selection) {
             Ok(_) => println!("Removed '{selection}' from the database!"),
             Err(e) => {
                 println!("error: words: {e}");

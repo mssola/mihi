@@ -1,6 +1,6 @@
-use mihi::{
-    configuration, get_adjective_table, get_inflected_from, get_noun_table, Category, Word,
-};
+use mihi::cfg::configuration;
+use mihi::inflection::{get_adjective_table, get_inflected_from, get_noun_table};
+use mihi::word::{Category, Word};
 
 fn print_noun_inflection(word: &Word) -> Result<(), String> {
     let table = get_noun_table(word)?;
@@ -119,14 +119,15 @@ pub fn print_full_inflection_for(word: Word) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mihi::DeclensionTable;
+    use mihi::inflection::DeclensionTable;
+    use mihi::word::{find_by, select_enunciated};
 
     fn get_word(enunciated: &str) -> Word {
-        let words = mihi::select_enunciated(Some(enunciated.to_string()), &[]).unwrap();
+        let words = select_enunciated(Some(enunciated.to_string()), &[]).unwrap();
 
         assert_eq!(words.len(), 1);
 
-        mihi::find_by(words.first().unwrap().as_str()).unwrap()
+        find_by(words.first().unwrap().as_str()).unwrap()
     }
 
     fn stringify_with(word: &Word, table: &DeclensionTable) -> String {
