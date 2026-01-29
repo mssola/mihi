@@ -75,7 +75,7 @@ fn help(msg: Option<&str>) {
 
     println!("\nSubcommands:");
     println!("   create\t\tCreate a new word.");
-    println!("   dup\t\tCreate a word which is an alternative of another one.");
+    println!("   dup\t\t\tCreate a word which is an alternative of another one.");
     println!("   edit\t\t\tEdit information from a word.");
     println!("   ls\t\t\tList the words from the database.");
     println!("   poke\t\t\tUpdate the timestamp for a word.");
