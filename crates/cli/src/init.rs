@@ -50,6 +50,5 @@ pub fn run(args: Vec<String>) {
 }
 
 fn init(language: String) -> Result<(), String> {
-    mihi::add_language(language)?;
-    mihi::init_database()
+    mihi::add_language(language)
 }

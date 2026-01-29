@@ -10,8 +10,6 @@ use rusqlite::types::{FromSql, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use rusqlite::Result;
 use rusqlite::{params, Connection};
 
-mod migrate;
-
 /// Returns the configuration path for the application, and it even creates it
 /// if it doesn't exist already.
 pub fn get_config_path() -> Result<PathBuf, String> {
@@ -334,21 +332,6 @@ pub fn add_language(language: String) -> Result<(), String> {
     match file.write_all(language.as_bytes()) {
         Ok(_) => Ok(()),
         Err(e) => Err(format!("could not save language '{language}': {e}")),
-    }
-}
-
-/// Ensure that in the config path there is a fully initialized database.
-pub fn init_database() -> Result<(), String> {
-    let name = &std::env::var("MIHI_DATABASE").unwrap_or("database.sqlite3".to_string());
-    let path = get_config_path()?.join(name);
-    let conn = match Connection::open(path) {
-        Ok(handle) => handle,
-        Err(e) => return Err(format!("could not initialize the database: {e}")),
-    };
-
-    match migrate::init(conn) {
-        Ok(_) => Ok(()),
-        Err(e) => Err(format!("bad database schema file: {e}")),
     }
 }
 
@@ -1245,11 +1228,12 @@ fn get_connection() -> Result<rusqlite::Connection, String> {
     let name = &std::env::var("MIHI_DATABASE").unwrap_or("database.sqlite3".to_string());
     let path = get_config_path()?.join(name);
 
-    match Connection::open(path) {
+    match Connection::open(&path) {
         Ok(handle) => Ok(handle),
-        Err(_) => Err(
-            "could not fetch the database. Ensure that you have called 'init' first".to_string(),
-        ),
+        Err(_) => Err(format!(
+            "could not fetch the database in '{}'",
+            path.display()
+        )),
     }
 }
 
