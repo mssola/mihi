@@ -185,7 +185,7 @@ fn rm(mut args: IntoIter<String>) -> i32 {
     let exercise = match select_single_exercise(args.next()) {
         Ok(exercise) => exercise,
         Err(e) => {
-            println!("error: words: {e}");
+            println!("error: exercises: {e}");
             return 1;
         }
     };
@@ -201,7 +201,7 @@ fn rm(mut args: IntoIter<String>) -> i32 {
         Ok(true) => match delete_exercise(selection) {
             Ok(_) => println!("Removed '{selection}' from the database!"),
             Err(e) => {
-                println!("error: words: {e}");
+                println!("error: exercises: {e}");
                 return 1;
             }
         },
