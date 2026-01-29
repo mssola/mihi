@@ -508,18 +508,17 @@ fn run_exercises(exercises: Vec<Exercise>) -> bool {
     }
 
     for exercise in exercises {
-        let Ok(solution) = Editor::new(
-            format!("Exercise '{}' (kind: {}):", exercise.title, exercise.kind).as_str(),
-        )
-        .with_predefined_text(
-            format!(
-                "---Enunciate: {}\n{}\n---!",
-                exercise.title, exercise.enunciate
+        let Ok(solution) = Editor::new(format!("Exercise '{}':", exercise.title).as_str())
+            .with_predefined_text(
+                format!(
+                    "---Enunciate: {}\n{}\n---!",
+                    exercise.title, exercise.enunciate
+                )
+                .as_str(),
             )
-            .as_str(),
-        )
-        .with_file_extension(".md")
-        .prompt() else {
+            .with_file_extension(".md")
+            .prompt()
+        else {
             return false;
         };
 

@@ -37,19 +37,6 @@ fn ask_for_exercise_based_on(exercise: Exercise) -> Result<Exercise, String> {
         return Err("the title is required".to_string());
     }
 
-    let kinds = vec![
-        ExerciseKind::Pensum,
-        ExerciseKind::Translation,
-        ExerciseKind::Transformation,
-        ExerciseKind::Numerical,
-    ];
-    let Ok(kind) = Select::new("Kind:", kinds)
-        .with_starting_cursor(exercise.kind as usize)
-        .prompt()
-    else {
-        return Err("abort!".to_string());
-    };
-
     let Ok(enunciate) = Editor::new("Enunciate:")
         .with_predefined_text(&exercise.enunciate)
         .with_file_extension(".md")
@@ -89,7 +76,7 @@ fn ask_for_exercise_based_on(exercise: Exercise) -> Result<Exercise, String> {
         enunciate,
         solution,
         lessons,
-        kind,
+        kind: ExerciseKind::Simple,
     })
 }
 

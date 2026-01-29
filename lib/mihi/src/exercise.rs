@@ -5,19 +5,13 @@ use rusqlite::params;
 #[derive(Clone, Copy, Debug, Default)]
 pub enum ExerciseKind {
     #[default]
-    Pensum = 0,
-    Translation,
-    Transformation,
-    Numerical,
+    Simple = 0,
 }
 
 impl std::fmt::Display for ExerciseKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Pensum => write!(f, "Pensum"),
-            Self::Translation => write!(f, "Translation"),
-            Self::Transformation => write!(f, "Transformation"),
-            Self::Numerical => write!(f, "Numerical"),
+            Self::Simple => write!(f, "Simple"),
         }
     }
 }
@@ -27,10 +21,7 @@ impl TryFrom<isize> for ExerciseKind {
 
     fn try_from(value: isize) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(Self::Pensum),
-            1 => Ok(Self::Translation),
-            2 => Ok(Self::Transformation),
-            3 => Ok(Self::Numerical),
+            0 => Ok(Self::Simple),
             _ => Err("unknonwn exercise kind"),
         }
     }
@@ -41,11 +32,8 @@ impl TryFrom<&str> for ExerciseKind {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
-            "pensum" => Ok(Self::Pensum),
-            "translation" => Ok(Self::Translation),
-            "transformation" => Ok(Self::Transformation),
-            "numerical" => Ok(Self::Numerical),
-            _ => Err("unknonwn exercise kind. Available: pensum, translation, transformation and numerical"),
+            "simple" => Ok(Self::Simple),
+            _ => Err("unknonwn exercise kind. Available: simple"),
         }
     }
 }
