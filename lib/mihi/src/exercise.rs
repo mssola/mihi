@@ -152,7 +152,7 @@ pub fn update_exercise(exercise: Exercise) -> Result<(), String> {
 }
 
 /// Updates the 'updated_at' column for an exercise.
-pub fn touch_exercise(exercise: Exercise) -> Result<(), String> {
+pub fn touch_exercise(exercise: &Exercise) -> Result<(), String> {
     if exercise.id == 0 {
         return Err("invalid exercise to update; seems it has not been created before".to_string());
     }

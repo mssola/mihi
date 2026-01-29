@@ -535,7 +535,12 @@ fn run_exercises(exercises: Vec<Exercise>) -> bool {
         // (i.e. refresh the 'updated_at' date). This way, next time we select
         // exercises to show the user, we can prevent this one showing up first.
         if accepted_diff(&solution, &exercise.solution) {
-            let _ = touch_exercise(exercise);
+            let _ = touch_exercise(&exercise);
+        }
+
+        let lessons = exercise.lessons.trim();
+        if !lessons.is_empty() {
+            println!("The lessons for this exercise were:\n{}", lessons);
         }
     }
 
