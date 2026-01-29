@@ -247,6 +247,12 @@ pub enum Conjugation {
     Third,
     ThirdIo,
     Fourth,
+
+    // The 'Other' conjugation is a container for a bunch of verbs like 'sum',
+    // 'volō', etc. That is, we expect the user to realize this is an irregular
+    // verb, and then we rely on the 'kind' column to determine which kind of
+    // irregular verb that is. This is better than enlarging a list of kinds of
+    // irregular verbs as it was done in the past.
     Other,
 }
 
@@ -281,6 +287,33 @@ impl std::fmt::Display for Conjugation {
             Conjugation::Fourth => write!(f, "4th (ī stems)"),
             Conjugation::Other => write!(f, "other"),
         }
+    }
+}
+
+impl Conjugation {
+    /// Returns a String containing how a conjugation would be displayed by also
+    /// considering the given 'kind' identifier. This way we can display 'other'
+    /// conjugations in a more natural way.
+    pub fn display_with_kind(&self, kind: &str) -> String {
+        if !matches!(self, Conjugation::Other) {
+            return format!("{}", self);
+        }
+
+        match kind {
+            "sum" => "irregular; like 'sum, esse, fuī, futūrus'",
+            "possum" => "irregular; like 'possum, posse, potuī'",
+            "eo" => "irregular; like 'eō, īre, iī, itum'",
+            "volo" => "irregular; like 'volō, velle, voluī'",
+            "nolo" => "irregular; like 'nōlō, nōlle, nōluī'",
+            "malo" => "irregular; like 'mālō, mālle, māluī'",
+            "fero" => "irregular; like 'ferō, ferre, tulī, lātum'",
+            "facio" => "3rd (-iō variants) and suppletive; like 'faciō, facere, fēcī, factum'",
+            "do" => "1st; irregular short ă in most forms",
+            "inquam" => "irregular, highly defective",
+            "aio" => "3rd (-iō variants); highly defective",
+            _ => "other",
+        }
+        .to_string()
     }
 }
 

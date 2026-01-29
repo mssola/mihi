@@ -250,6 +250,7 @@ fn prompt_conjugation(conjugation: Conjugation) -> Result<Conjugation, String> {
         Conjugation::Third,
         Conjugation::ThirdIo,
         Conjugation::Fourth,
+        Conjugation::Other,
     ];
     let idx = conjugation as usize - 1;
 
@@ -376,7 +377,20 @@ fn ask_for_word_based_on(enunciated: String, word: Word) -> Result<Word, String>
                 Err(_) => return Err("abort!".to_string()),
             }
         }
-        Category::Verb => String::from("verb"),
+        Category::Verb => {
+            if matches!(conjugation, Some(Conjugation::Other)) {
+                let options = vec![
+                    "sum", "possum", "eo", "volo", "nolo", "malo", "fero", "facio", "do", "inquam",
+                    "aio",
+                ];
+                match Select::new("Kind:", options).prompt() {
+                    Ok(kind) => kind.to_string(),
+                    Err(_) => return Err("abort!".to_string()),
+                }
+            } else {
+                "verb".to_string()
+            }
+        }
         _ => String::from("-"),
     };
 
@@ -968,7 +982,9 @@ fn show_info(word: Word) -> Result<(), String> {
 
     // Conjugation, declension + kind.
     match word.conjugation {
-        Some(ref conjugation) => println!("Conjugation: {}", conjugation),
+        Some(ref conjugation) => {
+            println!("Conjugation: {}", conjugation.display_with_kind(&word.kind))
+        }
         None => {
             if let Some(ref d) = word.declension {
                 if matches!(d, Declension::Other) {
