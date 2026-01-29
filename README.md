@@ -22,23 +22,6 @@ pass them. If you feel like you want to double down on some specific word that
 is not being asked, you can also call the `words poke` command, which will force
 the next session to ask for it.
 
-## Contributing
-
-This application is built like any other Rust project:
-
-```
-$ cargo build
-```
-
-In order to test things you need to provide a database for it. One is provided
-in the form of `testdata/test.sqlite3`. So take that and set the `MIHI_DATABASE`
-environment variable to its full path. And after that you will be able to run:
-
-```
-$ cargo test
-$ cargo clippy --all-targets --all-features
-```
-
 ## License
 
 This repository holds two licenses, as you can also note on the `Cargo.toml`
