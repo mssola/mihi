@@ -1,5 +1,6 @@
 use crate::inflection::print_full_inflection_for;
 use crate::locale::current_locale;
+use std::io::{stdin, IsTerminal};
 
 use inquire::{Confirm, Editor, MultiSelect, Select, Text};
 use mihi::cfg::Language;
@@ -74,7 +75,7 @@ fn help(msg: Option<&str>) {
     println!("   -t, --tag <NAME>\tFilter words which match the given tag NAME. Multiple tags can be provided to match words with any of the tags provided. This will only be accounted in the 'ls' command.");
 
     println!("\nSubcommands:");
-    println!("   create\t\tCreate a new word.");
+    println!("   create\t\tCreate a new word. It accepts word enunciates given into a pipe (an enunciate per line), otherwise this command is interactive.");
     println!("   dup\t\t\tCreate a word which is an alternative of another one.");
     println!("   edit\t\t\tEdit information from a word.");
     println!("   ls\t\t\tList the words from the database.");
@@ -536,8 +537,28 @@ fn create(args: IntoIter<String>) -> i32 {
     }
 
     loop {
-        // Grab the enunciate from the word that we want to create.
-        let Ok(enunciated) = Text::new("Enunciated:").prompt() else {
+        // Grab the enunciate from the word that we want to create. If the stdin
+        // is actually tied to a pipe, then try to read from it so we get the
+        // initial value for our prompt. If no more input is given into the
+        // pipe, then we quit altogether.
+        let mut guess = String::new();
+        let mut guess_str = "";
+        if !stdin().is_terminal() {
+            if stdin().read_line(&mut guess).unwrap_or(0) == 0 {
+                // No more input, quit.
+                return 0;
+            }
+            guess_str = guess.trim();
+
+            // Blank line, quit as well.
+            if guess_str.is_empty() {
+                return 0;
+            }
+        }
+        let Ok(enunciated) = Text::new("Enunciated:")
+            .with_initial_value(guess_str)
+            .prompt()
+        else {
             return 1;
         };
         if enunciated.trim().is_empty() {
