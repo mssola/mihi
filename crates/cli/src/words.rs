@@ -76,7 +76,7 @@ fn help(msg: Option<&str>) {
 
     println!("\nSubcommands:");
     println!("   create\t\tCreate a new word. It accepts word enunciates given into a pipe (an enunciate per line), otherwise this command is interactive.");
-    println!("   dup\t\t\tCreate a word which is an alternative of another one.");
+    println!("   dup\t\t\tCreate a word which is an alternative of another one. Short version of 'rel' for alternative words.");
     println!("   edit\t\t\tEdit information from a word.");
     println!("   ls\t\t\tList the words from the database.");
     println!("   poke\t\t\tUpdate the timestamp for a word.");
